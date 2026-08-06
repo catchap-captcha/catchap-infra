@@ -1,0 +1,41 @@
+# 운영 콘솔이 「지금 무엇이 떠 있나」를 읽기 위한 ★최소 권한.
+#
+# ★읽기만 준다 — get·list·watch. 바꾸는 동사(create·update·patch·delete)는 아예 없다.
+#   백엔드가 뚫려도 이 권한으로는 클러스터를 ★못 바꾼다.
+#
+# ★Role 이지 ClusterRole 이 아니다 — catchap 네임스페이스 ★안에서만 통한다.
+#   monitoring·argocd·kube-system 은 못 본다.
+#
+# ⚠️왜 ArgoCD 토큰을 안 쓰나 — ArgoCD 는 클러스터 전체를 바꿀 수 있다.
+#   그 토큰을 백엔드에 두면 운영자 계정 하나가 뚫렸을 때 클러스터가 통째로 넘어간다.
+#   필요한 것은 "무엇이 떠 있나" 뿐이므로 그만큼만 읽는다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: catchap-ops-read
+  namespace: catchap
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+# 백엔드 파드가 쓰는 ServiceAccount 에 붙인다.
+# ⚠️지금 백엔드 파드는 `default` ServiceAccount 로 돈다(0807 실측).
+#   전용 ServiceAccount 로 옮기면 여기 이름도 같이 고쳐야 한다 — 안 고치면
+#   403 이 나고 화면이 "권한이 없습니다" 를 보여 준다(조용히 빈 목록이 되지 않는다).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: catchap-ops-read
+  namespace: catchap
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: catchap
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: catchap-ops-read
