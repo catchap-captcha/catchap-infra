@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: behavior-ai
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: behavior-ai
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: behavior-ai
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # ★★maxUnavailable 은 1 이어야 한다 (0804 프론트에서 실측으로 배운 것).
+      #   안티어피니티로 "같은 노드 금지"를 걸면, 노드 2대에 파드 2벌인 상태에서
+      #   maxUnavailable:0 은 **영원히 Pending** 이 된다 — 옛 파드가 두 노드를 다
+      #   차지해 새 파드가 앉을 자리가 없는데, 옛 파드를 먼저 안 내리기 때문이다.
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: behavior-ai
+    spec:
+      # ★저장소가 비공개다. 이게 없으면 ImagePullBackOff 로 멈춘다.
+      imagePullSecrets:
+        - name: catchap-registry
+      # ★★같은 노드에 두 벌이 붙는 것을 금지한다.
+      #   topologySpreadConstraints 는 **놓을 때만** 보고 놓은 뒤에는 안 고친다.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: behavior-ai
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: behavior-ai
+      # ★이미지가 이미 비root 다 — USER aiservice (uid/gid 10001). 확인하고 적었다.
+      #   여기 다시 쓰는 이유는, 나중에 이미지가 바뀌어도 root 로 안 돌게 못 박기 위해서다.
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+      containers:
+        - name: behavior-ai
+          # ★★0805 저녁 — 다시 구웠습니다. 앞의 이미지가 낡았던 것을 찾았습니다.
+          #
+          #   처음 가져온 것   옛 백엔드 서버의 도커 이미지 (7/28 빌드)
+          #   ★기준           옛 GPU /home/sw/catchap-behavior — ★캡차가 실제로 부르는 것
+          #
+          #   database/mysql_models.py   17,761  ≠  ★18,538
+          #   database/repositories.py   23,093  ≠  ★23,794
+          #   schemas/requests.py         6,770  ≠  ★7,459
+          #
+          # ★★/health 로는 안 잡혔습니다 — 모델 이름·버전·스키마가 셋 다 같아서
+          #   「같은 것」으로 판단했습니다. ★응답이 같다고 코드가 같은 게 아닙니다.
+          #
+          # 굽는 방법 — 밑바닥부터 안 굽고 ★app/ 만 덮었습니다
+          #   · GPU 소스에 Dockerfile 이 없습니다
+          #   · ★이미지 안의 requirements-serve.txt 가 GPU 것보다 낫습니다
+          #     (cryptography·pandas 가 더 있음. cryptography 는 MySQL 8 기본 인증에 필요)
+          #   · learning/ 과 models/ 는 ★지문이 이미 같았습니다(대조 확인)
+          #
+          # ⚠️태그가 이미지 ID 입니다. GPU 소스가 ★어느 커밋과도 일치하지 않습니다
+          #   (origin/sw 의 repositories.py 는 24,216 으로 또 다릅니다).
+          #   → 저장소를 정리하고 나면 커밋 해시로 바꿉니다.
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-behavior-ai:feea9a597269
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8010
+          envFrom:
+            - configMapRef:
+                name: behavior-ai-config
+            - secretRef:
+                name: behavior-ai-secret
+          # ★★/health 는 DB 가 죽어도 **HTTP 200** 을 준다. 본문에만 "degraded" 라고 쓴다
+          #   (app/api/health.py 확인). 그래서 프로브 성격이 이렇게 갈린다.
+          #
+          #     liveness  ○ 알맞다 — DB 장애 조치 중에 파드를 죽이지 않는다.
+          #                        프로세스가 먹통이면 응답 자체가 없어 걸린다.
+          #     readiness △ DB 끊김을 **못 잡는다.** 그래도 이대로 두는 이유는,
+          #                 지금 정책이 shadow 라 **판정에 관여하지 않기** 때문이다.
+          #                 DB 없는 AI 는 점수가 나빠질 뿐 서비스를 막지 않는다.
+          #   ⚠️active 로 바꾸는 날에는 이 판단을 다시 해야 한다.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # ★모델(joblib)을 읽어 올리는 시간이 있다. 넉넉히 기다린다.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24   # 최대 2분
+          # ★★실측값에 맞췄다 — 옛 프로덕션에서 **153.4MiB · CPU 0.26%** 로 돌고 있다.
+          #   추측이 아니라 `docker stats` 로 잰 값이다.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              memory: "512Mi"
+          # ★디스크에 쓰는 코드가 없다(이미지 전수 검색 결과 0건). 모델도 이미지 안이고
+          #   옛 서버 컨테이너에도 볼륨이 하나도 안 붙어 있다 = **무상태**.
+          #   그래서 루트 파일시스템을 읽기 전용으로 잠근다.
+          #   ⚠️/tmp 만 열어 둔다 — joblib·파이썬이 임시 파일을 쓸 수 있어서다.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi

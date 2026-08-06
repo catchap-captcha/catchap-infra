@@ -1,0 +1,64 @@
+# 노드를 정비할 때 서비스가 끊기지 않게 — PodDisruptionBudget
+#
+# ★무엇을 막나
+#   쿠버네티스가 노드를 비울 때(drain — 업데이트·정비·축소) 그 노드의 파드를 내린다.
+#   ★막는 것이 없으면 두 노드를 잇달아 비울 때 파드가 ★0개가 되는 순간이 생긴다.
+#
+# ★minAvailable: 1 의 뜻
+#   "정비 때문에 내리더라도 ★최소 1벌은 살아 있어야 한다"
+#   → 노드 한 대씩만 비울 수 있게 되고, 서비스가 안 끊긴다.
+#
+# ⚠️우리 구조에서 왜 특히 필요한가
+#   각 서비스가 2벌이고 podAntiAffinity 로 ★노드당 1벌씩 앉아 있다.
+#   노드 하나를 비우면 그 파드는 ★다른 노드에 못 앉는다(같은 노드 금지).
+#   즉 1벌로 떨어진 채로 버티는데, 이때 ★두 번째 노드까지 비우면 0벌이 된다.
+#
+# ★관리형 클러스터라 카카오가 노드를 자동으로 업데이트할 수 있다.
+#   그때 우리가 안 보고 있어도 이 규칙이 지켜 준다.
+#
+# ⚠️주의 — PDB 는 「자발적 중단」만 막는다.
+#   노드가 ★고장 나서 죽는 것은 못 막는다(그건 가용 영역 분리가 맡는다).
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-api
+  namespace: catchap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: catchap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: captcha-api
+  namespace: catchap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: captcha
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: behavior-ai
+  namespace: catchap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: behavior-ai

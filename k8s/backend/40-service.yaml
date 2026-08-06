@@ -1,0 +1,17 @@
+# ★서비스는 "파드가 몇 개든, 어디로 옮겨 다니든 이 이름으로 부르면 된다"는 창구다.
+#   파드가 죽고 새로 뜨면 IP 가 바뀌는데, 이 이름은 안 바뀐다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-api
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -1,0 +1,52 @@
+# behavior-ai — 비밀이 아닌 설정
+#
+# ★★값의 출처 (0805)
+#   옛 프로덕션 서버 `210.109.52.124` 에서 **7일째 돌고 있는 컨테이너와 그 이미지**를
+#   직접 열어서 읽었다. 추측한 값이 없다.
+#
+#     docker inspect catchap-behavior-ai --format '{{.Config.Cmd}} …'
+#     docker run --rm --entrypoint cat <이미지> /app/app/config.py
+#     curl http://127.0.0.1:8010/health          ← 실제로 무엇이 떠 있는지
+#
+#   ⚠️환경변수의 **값**은 안전장치에 막혀 못 읽었다. 그래서 **이름과 코드 기본값**으로
+#     맞췄고, 값이 필요한 것은 아래 20-secret 으로 뺐다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: behavior-ai-config
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: behavior-ai
+data:
+  TZ: "Asia/Seoul"
+
+  # ── 데이터베이스 (관리형 MySQL)
+  # ★캡차와 같은 인스턴스, 다른 데이터베이스다. 이름 규칙도 캡차와 맞춘다.
+  # ★★0805 — IP(10.0.2.193) 에서 콘솔이 정본으로 주는 DNS 이름으로 바꿨다.
+  #   ★역할을 정하는 것은 포트다 — 3306 은 언제나 **현재 Primary** 로 간다.
+  #     호스트명(az-a/az-b)은 역할과 무관(0731 connection_id 확증 · 0803 장애조치 재확인).
+  MYSQL_HOST: "az-b.mysql-team1.5f428f1b341249c983ab19c6f8f3fdb4.mysql.managed-service.kr-central-2.kakaocloud.com"
+  MYSQL_PORT: "3306"
+  MYSQL_DATABASE: "catchap_ai"
+  MYSQL_USER: "catchap_ai_app"
+  MYSQL_POOL_SIZE: "5"
+
+  # ── 모델
+  # ★★코드 기본값은 `models/production` 인데 **이미지에 그 폴더가 없다.**
+  #   이미지 안에 있는 모델 번들은 아래 하나뿐이다.
+  #
+  #     /app/models/candidate/revalidation_two_view_participant_safe_20260722/
+  #         two_view_fusion.joblib   (1.2MB)
+  #
+  #   기본값으로 두면 모델이 **말없이 안 뜬다**(앱은 그래도 200 을 준다).
+  #   프로덕션 /health 가 아래를 돌려준 것으로 이 경로가 맞다는 걸 확인했다.
+  #
+  #     model_loaded: true
+  #     model_version: "revalidation_two_view_participant_safe_20260722"
+  PRODUCTION_MODEL_DIR: "models/candidate/revalidation_two_view_participant_safe_20260722"
+
+  # ── 위험도 판정 방식
+  # ★★shadow = "AI 가 이렇게 판단했을 것이다"를 기록만 하고 **실제 캡차 결과를 안 바꾼다.**
+  #   프로덕션이 지금 shadow 다(/health 로 확인). 이전은 그대로 옮기는 게 원칙이라
+  #   여기서 active 로 바꾸지 않는다. 바꾸려면 별도 판단과 관찰이 필요하다.
+  RISK_POLICY_MODE: "shadow"

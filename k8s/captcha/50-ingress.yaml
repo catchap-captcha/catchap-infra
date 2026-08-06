@@ -1,0 +1,26 @@
+# ★캡차를 바깥에 여는 규칙.
+#   옛 구조에서 Caddy 가 하던 일(도메인 → 앱 연결)을 여기가 대신한다.
+#
+# ⚠️적용 전에 확인할 것 두 가지
+#   ① captcha.catchap5.com 의 DNS 레코드가 아직 없다 → 로드밸런서를 가리키게 만들어야 한다
+#   ② 인그레스 컨트롤러가 아직 클러스터에 없다 → cluster-admin 을 받은 뒤 설치한다
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: captcha
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: captcha
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: captcha.catchap5.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: captcha-api
+                port:
+                  name: http

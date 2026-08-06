@@ -1,0 +1,132 @@
+# CatChap 전용 경보 규칙 — 기본 규칙이 못 잡는 것만
+#
+#   kubectl apply -f 74-경보규칙-catchap.yaml
+#
+# ★기본으로 깔린 경보가 이미 ★120종 있습니다. 그래서 여기엔 ★겹치지 않는 것만 넣습니다.
+#   이미 있는 것(넣지 않음): KubePodCrashLooping · KubePodNotReady ·
+#     KubeDeploymentReplicasMismatch · KubeContainerWaiting · TargetDown ·
+#     NodeFilesystemAlmostOutOfSpace · KubePersistentVolumeFillingUp · KubeHpaMaxedOut
+#
+# ★지표는 0806 에 프로메테우스에서 ★실제로 계열 수를 세어 확인한 것만 씁니다.
+#   ⚠️kube_pod_container_status_last_terminated_reason 은 ★클러스터 전체에 0계열이라
+#     (kube-state-metrics 가 안 내줍니다) OOM 을 그 지표로 잡으려던 규칙은 ★뺐습니다.
+#     대신 ★메모리 제한에 붙는 것을 미리 잡습니다 — 그게 OOM 의 원인이기 때문입니다.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: catchap-rules
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: catchap
+spec:
+  groups:
+    - name: catchap.서비스
+      rules:
+        # ─────────────────────────────────────────────────────────────
+        # ★메모리 제한에 붙는 것 — OOMKill 은 예고 없이 옵니다
+        #   쿠버네티스는 컨테이너가 ★제한을 넘는 순간 그냥 죽입니다(경고 없음).
+        #   그래서 ★넘기 전에 알아야 합니다. 분모는 노드 용량이 아니라 ★그 파드의 제한입니다.
+        #   0806 실측 최고값이 27.7% 라 85/95 는 지금 울리지 않습니다.
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapPodMemoryNearLimit
+          expr: |
+            100 * sum by (pod) (container_memory_working_set_bytes{namespace="catchap",container!=""})
+                / sum by (pod) (kube_pod_container_resource_limits{namespace="catchap",resource="memory"})
+            > 85
+          for: 10m
+          labels: {severity: warning, team: catchap}
+          annotations:
+            summary: "{{ $labels.pod }} 메모리가 제한의 85%를 넘었습니다"
+            description: >-
+              지금 {{ $value | printf "%.0f" }}% 입니다. 100%에 닿으면 쿠버네티스가 이 파드를
+              그냥 죽입니다(OOMKill). 트래픽이 는 것인지, 메모리가 새는 것인지 봐야 합니다.
+              그라파나 「CatChap 한눈에」의 '파드 메모리 — 제한 대비' 칸에서 추이를 봅니다.
+
+        - alert: CatchapPodMemoryCritical
+          expr: |
+            100 * sum by (pod) (container_memory_working_set_bytes{namespace="catchap",container!=""})
+                / sum by (pod) (kube_pod_container_resource_limits{namespace="catchap",resource="memory"})
+            > 95
+          for: 5m
+          labels: {severity: critical, team: catchap}
+          annotations:
+            summary: "★{{ $labels.pod }} 가 곧 죽습니다 (메모리 제한의 95% 초과)"
+            description: >-
+              지금 {{ $value | printf "%.0f" }}% 입니다. 곧 OOMKill 됩니다.
+              급하면 제한을 올려(k8s/*/30-deployment.yaml) 다시 배포합니다.
+
+        # ─────────────────────────────────────────────────────────────
+        # ★서비스가 아예 안 뜬 것 — 기본 규칙(KubeDeploymentReplicasMismatch)은
+        #   warning 이고 15분을 기다립니다. 0벌은 ★서비스 중단이라 따로 둡니다.
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapServiceDown
+          expr: kube_deployment_status_replicas_available{namespace="catchap"} == 0
+          for: 3m
+          labels: {severity: critical, team: catchap}
+          annotations:
+            summary: "★{{ $labels.deployment }} 가 한 벌도 안 떠 있습니다"
+            description: >-
+              이 서비스로 오는 요청이 전부 실패합니다.
+              kubectl -n catchap describe deploy {{ $labels.deployment }} 로 이유를 봅니다.
+
+        # ─────────────────────────────────────────────────────────────
+        # ★건물 하나만 남은 것 — 서비스는 되지만 ★이중화가 깨진 상태입니다.
+        #   이때 남은 한 벌마저 죽으면 그대로 중단입니다.
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapServiceSingleReplica
+          expr: |
+            kube_deployment_status_replicas_available{namespace="catchap"} == 1
+            and on (deployment) kube_deployment_spec_replicas{namespace="catchap"} >= 2
+          for: 15m
+          labels: {severity: warning, team: catchap}
+          annotations:
+            summary: "{{ $labels.deployment }} 가 한 벌만 남았습니다 (이중화 깨짐)"
+            description: >-
+              두 건물에 하나씩 떠 있어야 하는데 하나뿐입니다. 서비스는 되지만
+              이 한 벌이 죽으면 바로 중단입니다. 노드 상태와 파드 이벤트를 봅니다.
+
+        # ─────────────────────────────────────────────────────────────
+        # ★천천히 반복해서 죽는 것 — 기본 KubePodCrashLooping 은 ★빠른 재시작만 잡습니다.
+        #   한 시간에 서너 번씩 조용히 죽는 경우는 그 규칙에 안 걸립니다.
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapPodRestartingRepeatedly
+          expr: increase(kube_pod_container_status_restarts_total{namespace="catchap"}[1h]) > 3
+          for: 10m
+          labels: {severity: warning, team: catchap}
+          annotations:
+            summary: "{{ $labels.pod }} 가 한 시간에 {{ $value | printf \"%.0f\" }}번 다시 떴습니다"
+            description: >-
+              죽고 다시 뜨기를 반복하는 중입니다. 그 사이 요청은 실패합니다.
+              kubectl -n catchap logs {{ $labels.pod }} --previous 로 죽기 직전 기록을 봅니다.
+
+        # ─────────────────────────────────────────────────────────────
+        # ★이미지를 못 받아 배포가 멈춘 것 — 배포 사고에서 제일 흔합니다.
+        #   (태그 오타 · 레지스트리 로그인 만료 · 이미지를 아직 안 올림)
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapImagePullFailing
+          expr: |
+            kube_pod_container_status_waiting_reason{namespace="catchap",reason=~"ImagePullBackOff|ErrImagePull"} == 1
+          for: 5m
+          labels: {severity: critical, team: catchap}
+          annotations:
+            summary: "★{{ $labels.pod }} 가 이미지를 못 받고 있습니다 ({{ $labels.reason }})"
+            description: >-
+              배포가 멈춰 있습니다. 태그가 맞는지, 레지스트리에 그 이미지가 올라가 있는지 봅니다.
+              이전 판본은 계속 돌고 있어 서비스는 유지됩니다.
+
+    - name: catchap.수집장치
+      rules:
+        # ─────────────────────────────────────────────────────────────
+        # ★지표 수집이 끊긴 것 — 이게 끊기면 ★다른 모든 경보가 같이 조용해집니다.
+        #   "조용하다"를 "괜찮다"로 읽지 않으려면 이 규칙이 필요합니다.
+        # ─────────────────────────────────────────────────────────────
+        - alert: CatchapMetricsCollectionStopped
+          expr: |
+            absent(kube_deployment_status_replicas_available{namespace="catchap"}) == 1
+          for: 10m
+          labels: {severity: critical, team: catchap}
+          annotations:
+            summary: "★catchap 지표가 10분째 안 들어옵니다"
+            description: >-
+              kube-state-metrics 가 죽었거나 프로메테우스가 못 걷어가는 중입니다.
+              이 상태에서는 ★다른 경보도 안 울립니다 — 조용한 것이 괜찮다는 뜻이 아닙니다.

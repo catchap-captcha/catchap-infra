@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # ★★maxUnavailable 을 0 에서 1 로 바꿨다 (0804 실측).
+      #   안티어피니티로 "같은 노드 금지"를 걸면, 노드 2대에 파드 2벌인 상태에서
+      #   maxUnavailable:0 은 **영원히 Pending** 이 된다 —
+      #   옛 파드가 두 노드를 다 차지해 새 파드가 앉을 자리가 없는데,
+      #   옛 파드를 먼저 안 내리기 때문이다. 서로 기다린다.
+      #   → 노드가 2대인 한 "무중단 배포"와 "노드 분리"는 동시에 안 된다.
+      #     노드 분리를 골랐다. 배포는 우리가 고르는 순간이고 노드 장애는 안 고른다.
+      #   ⚠️배포 중 몇십 초 동안 1벌로 받는다. 로드밸런서가 준비 안 된 파드로는
+      #     안 보내므로 끊기지는 않는다.
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+    spec:
+      # ★저장소가 비공개다. 이게 없으면 ImagePullBackOff 로 멈춘다.
+      imagePullSecrets:
+        - name: catchap-registry
+      # ★★같은 노드에 두 벌이 붙는 것을 금지한다 (0804 프론트에서 실측으로 배운 것).
+      #   topologySpreadConstraints 는 **놓을 때만** 보고 놓은 뒤에는 안 고친다.
+      #   롤링 업데이트로 옛 파드가 빠지면 한쪽에 쏠릴 수 있다.
+      #   ⚠️노드가 1대만 남으면 두 번째 파드는 Pending 이 된다.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: backend
+      # 영역 균형은 "되도록"으로 남긴다(catchap-core-2a · catchap-core-2b).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+      containers:
+        - name: backend
+          # ★태그가 커밋 해시다. 이 해시로 GitHub 을 찾으면 정확히 그 코드다.
+          #   latest 를 쓰지 않는다 — 무엇이 떠 있는지 모르게 된다.
+          #
+          # ★★0806 — ae8203c 는 ★origin/jy 에 그대로 올라가 있는 커밋입니다.
+          #   `git show ae8203c` 로 정확히 그 코드를 봅니다. (앞선 79d5e2d05a1e 는
+          #   옛 서버의 `latest` 를 가져온 것이라 태그가 ★이미지 ID 였습니다)
+          #
+          # ★이 이미지에 들어간 것 (전부 origin/jy 에 병합 완료)
+          #   ① 클러스터 지표 수집 — 노드·서비스를 프로메테우스에서 읽습니다
+          #   ② ★경보 수신 — Alertmanager 웹훅 → 운영자 콘솔 벨 + 메일
+          #   ③ ★STT 에 오디오만 전송 + 자기검증 잘림 수정 (Dockerfile 에 ffmpeg 추가)
+          #      ★이게 없으면 11.66GB 영상을 통째로 보내 문항 생성이 실패합니다.
+          #      0806 병합 전까지 ★새 클러스터에는 없었습니다.
+          #   ④ jy님 작업 전부 (코스 썸네일·수료 기준 완화·결제 수정 등)
+          #
+          # ⚠️★`app/core/secrets_loader.py` 는 아직 **없습니다.**
+          #   로더는 feat/media-object-storage 브랜치에 있고 origin/jy 에 안 들어갔습니다.
+          #   → 비밀값 10개는 계속 backend-secret 에 있습니다.
+          #   → ConfigMap 의 SECRETS_* 는 이 이미지에서 **무시됩니다.**
+          #   ⬜jy님께 로더 병합을 요청할 것. 병합되면 Secret 을 열쇠 2줄로 되돌립니다.
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-backend-repo/catchap-backend:ae8203c
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          # ★★두 health 가 하는 일이 다르다. 이미지 안에서 직접 확인했다.
+          #     /health          main.py     — DB 를 안 본다. "프로세스가 살아 있나"
+          #     /api/v1/health   health.py   — SELECT 1 을 한다. "DB 까지 준비됐나"
+          #   그래서 liveness 에는 /health, readiness 에는 /api/v1/health 를 쓴다.
+          #   ⚠️거꾸로 쓰면 DB 가 잠깐 끊길 때 파드를 죽여 버린다 — DB 장애가 앱 장애로 번진다.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # ★설정 검사(ENV=prod)에 걸리면 부팅 자체가 실패한다. 그때는 재시도해도 소용없으니
+          #   startupProbe 를 길게 잡지 않는다. 빨리 CrashLoop 로 떨어져야 로그를 보게 된다.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 18   # 최대 90초
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              memory: "1536Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      # ★파일을 안 쓴다. 미디어는 전부 Object Storage 로 가므로 볼륨이 필요 없다.
+      #   (캡차는 data/runtime 에 쓰기 때문에 emptyDir 이 있었다 — 여기는 없다)

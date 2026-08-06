@@ -1,0 +1,133 @@
+# 배포 계정(catchap-ci)의 권한을 좁힌다 — 0805
+#
+# ★왜 하나
+#   0804 에 인그레스 컨트롤러를 깔려고 `cluster-admin` 을 줬다. 그건 한 번 끝난 일인데
+#   권한이 그대로 남아 있다. 그 키는 빌드 서버 `/home/ubuntu/.catchap/ci.env` 에
+#   ★상시로 놓여 있어서, 그 서버에 들어가면 ★클러스터 안 모든 Secret 을 읽는다.
+#
+#   ★★그리고 자동배포를 붙이면 이 키를 러너가 쓴다. 워크플로가 털리면 클러스터가 털린다.
+#
+# ★무엇이 실제로 필요한가 (0805 실측)
+#   catchap 안   deployment 4 · service 4 · configmap 5 · secret 4 · ingress 3
+#                pod 8 · replicaset 12
+#   클러스터 범위  ★없음 — 인그레스 컨트롤러는 이미 깔려 있고 더 손댈 일이 없다
+#
+# ⚠️되돌리기
+#   kubectl create clusterrolebinding catchap-ci-cluster-admin \
+#     --clusterrole=cluster-admin \
+#     --user=catchap-ci-kc-sfacspace05@kc.serviceaccount.com
+---
+# ── ① 배포에 필요한 것 — catchap 네임스페이스 안에서만
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: catchap-deployer
+  namespace: catchap
+rules:
+  # 앱 자체
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ★비밀값 — 배포에 필요하지만 가장 센 권한이다
+  #   ⬜자동배포(ArgoCD)로 옮기면 이 줄을 빼는 것을 검토할 것.
+  #     그때는 Secret 을 사람이 따로 넣고 CD 는 안 건드리게 할 수 있다.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+  # 확인용 — 파드 상태·로그
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+  # 롤아웃이 막혔을 때 파드를 지워 다시 띄우는 용도
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+
+  # ★pods/exec — 파드 안에서 확인 명령을 돌리는 데 쓴다(오늘 계속 썼다).
+  #   ⚠️강한 권한이다. 파드 안에 들어가면 그 파드의 환경변수를 다 볼 수 있다.
+  #   ⬜자동배포로 옮기면 CD 계정에서는 빼는 것이 맞다. 사람이 진단할 때만 필요하다.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+
+  # 임시 확인용 파드를 띄우는 용도 (netcheck 같은 것)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: catchap-ci-deployer
+  namespace: catchap
+subjects:
+  - kind: User
+    name: catchap-ci-kc-sfacspace05@kc.serviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: catchap-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── ② 진단용 조회 — 클러스터 범위지만 ★읽기만
+#   왜 필요한가: 파드가 어느 노드에 앉았는지, 네임스페이스가 무엇이 있는지 등을 본다.
+#   ★쓰기 권한은 하나도 없다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: catchap-ci-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: catchap-ci-readonly
+subjects:
+  - kind: User
+    name: catchap-ci-kc-sfacspace05@kc.serviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: catchap-ci-readonly
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── ③ ★시험용 — 이 좁힌 권한만으로 되는지 재기 위한 가짜 사용자
+#   cluster-admin 이 붙어 있는 동안은 `auth can-i` 가 무조건 yes 를 준다.
+#   그래서 이 사람인 척(impersonate) 해서 재고, 확인이 끝나면 이 둘을 지운다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rbac-test-deployer
+  namespace: catchap
+subjects:
+  - kind: User
+    name: rbac-test-user
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: catchap-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rbac-test-readonly
+subjects:
+  - kind: User
+    name: rbac-test-user
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: catchap-ci-readonly
+  apiGroup: rbac.authorization.k8s.io

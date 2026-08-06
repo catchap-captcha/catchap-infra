@@ -1,0 +1,990 @@
+# 「CatChap 한눈에」 — 자주 볼 화면 하나
+#
+#   kubectl apply -f 73-그라파나-대시보드-catchap.yaml
+#
+# ★그라파나 화면에서 손으로 만들지 않고 ★매니페스트로 선언합니다.
+#   화면에서 만든 대시보드는 그라파나 파드를 다시 만들면 사라질 수 있고,
+#   무엇보다 ★누가 언제 왜 바꿨는지가 안 남습니다.
+#
+# ★어떻게 들어가나 — 그라파나 옆에 붙은 작은 프로그램(사이드카)이
+#   `grafana_dashboard: "1"` 딱지가 붙은 ConfigMap 을 찾아 그라파나에 넣어 줍니다.
+#   그래서 이 파일을 apply 하면 ★그라파나를 다시 띄우지 않아도 몇 초 뒤 화면에 뜹니다.
+#
+# ★이 파일은 손으로 고치지 말고 생성기를 고치세요 — JSON 은 쉼표 하나에 화면이 안 뜹니다.
+#   생성기: 세션 작업폴더의 make_dashboard.py (내용은 00-지금하는일.md 에 요약)
+#
+# ⚠️지표 이름과 라벨은 0806 에 Metric Export 로 ★실제 값을 받아 확인한 것만 씁니다.
+#   문서에 있는 이름이라도 실제로는 0계열인 것이 있었습니다
+#   (예: mysql_threads_connected 는 없고 ★mysql_connections_count 가 맞습니다).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-catchap-overview
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"        # ★이 딱지가 있어야 사이드카가 줍습니다
+data:
+  catchap-overview.json: |
+    {
+      "uid": "catchap-overview",
+      "title": "CatChap 한눈에",
+      "description": "지금 서비스가 괜찮은지 한 화면에서 본다. 0806 작성.",
+      "tags": [
+        "catchap",
+        "★자주보는화면"
+      ],
+      "timezone": "Asia/Seoul",
+      "editable": true,
+      "schemaVersion": 39,
+      "refresh": "30s",
+      "time": {
+        "from": "now-3h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "서비스 — 지금 떠 있나",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "서비스별 떠 있는 벌 수",
+          "description": "각 서비스가 몇 벌 살아 있는지. ★2가 정상입니다(건물마다 하나씩). 1이면 한 건물만 남은 것이고, 0이면 그 서비스가 죽은 것입니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "kube_deployment_status_replicas_available{namespace=\"catchap\"}",
+              "legendFormat": "{{deployment}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 1,
+            "w": 9,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "green",
+                    "value": 2
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "text": {
+              "valueSize": 36
+            }
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "최근 1시간 다시 시작한 횟수",
+          "description": "★0이 정상입니다. 숫자가 오르면 그 파드가 죽고 다시 뜨기를 반복한다는 뜻입니다 — 메모리 부족(OOM)이나 오류로 죽는 중일 수 있습니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"catchap\"}[1h])) > 0",
+              "legendFormat": "{{pod}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 9,
+            "y": 1,
+            "w": 8,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "text": {
+              "valueSize": 36
+            }
+          }
+        },
+        {
+          "id": 4,
+          "type": "gauge",
+          "title": "파드 메모리 — 제한 대비",
+          "description": "★분모가 '노드 용량'이 아니라 그 파드에게 준 '메모리 제한'입니다. 100%에 닿으면 쿠버네티스가 그 파드를 죽입니다(OOMKill). 즉 이 숫자가 ★죽기까지 남은 여유입니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 * sum by (pod) (container_memory_working_set_bytes{namespace=\"catchap\",container!=\"\"}) / sum by (pod) (kube_pod_container_resource_limits{namespace=\"catchap\",resource=\"memory\"})",
+              "legendFormat": "{{pod}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 17,
+            "y": 1,
+            "w": 7,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              },
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdMarkers": true
+          }
+        },
+        {
+          "id": 5,
+          "type": "row",
+          "title": "노드 — 서비스가 올라앉은 기계 2대",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 7,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "노드 CPU",
+          "description": "두 노드의 CPU 사용률. 한쪽만 높으면 파드가 한쪽에 몰린 것입니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+              "legendFormat": "{{instance}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 8,
+            "w": 8,
+            "h": 7
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "fillOpacity": 8,
+                "lineWidth": 2,
+                "showPoints": "never",
+                "gradientMode": "opacity"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "노드 메모리",
+          "description": "쓸 수 있는 메모리를 뺀 사용률입니다(캐시는 쓸 수 있는 쪽으로 셉니다).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+              "legendFormat": "{{instance}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 8,
+            "y": 8,
+            "w": 8,
+            "h": 7
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "fillOpacity": 8,
+                "lineWidth": 2,
+                "showPoints": "never",
+                "gradientMode": "opacity"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "type": "gauge",
+          "title": "노드 디스크",
+          "description": "★차면 파드가 뜨지 않고 이미지도 못 받습니다. 지난달 GPU 서버가 이걸로 멈췄습니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay|squashfs\"})",
+              "legendFormat": "{{instance}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 16,
+            "y": 8,
+            "w": 8,
+            "h": 7
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 75
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdMarkers": true
+          }
+        },
+        {
+          "id": 9,
+          "type": "row",
+          "title": "데이터베이스 — 카카오가 운영하는 부분 (mysql-team1)",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 15,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "id": 10,
+          "type": "stat",
+          "title": "★대기 서버가 얼마나 뒤처져 있나 (초)",
+          "description": "주 서버가 죽으면 대기 서버가 대신 받습니다. 이 숫자가 ★그때 잃을 수 있는 시간입니다. 0이면 따라잡고 있다는 뜻이고, 계속 커지면 대기 서버가 못 쫓아오는 중입니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-mysql"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "mysql_replication_lag{instance_group_name=\"mysql-team1\"}",
+              "legendFormat": "{{instance_name}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-mysql"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 16,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 5
+                  },
+                  {
+                    "color": "red",
+                    "value": 30
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "text": {
+              "valueSize": 36
+            }
+          }
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "DB CPU — 주 서버 / 대기 서버",
+          "description": "주(primary)와 대기(standby)를 나눠 봅니다. 주 서버만 높은 것이 정상입니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-mysql"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "cpu_usage{instance_group_name=\"mysql-team1\"}",
+              "legendFormat": "{{replication_role}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-mysql"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 6,
+            "y": 16,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "fillOpacity": 8,
+                "lineWidth": 2,
+                "showPoints": "never",
+                "gradientMode": "opacity"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "DB 연결 사용률",
+          "description": "최대 연결 수(682) 대비 지금 쓰는 비율입니다. 100%에 닿으면 새 접속이 거절됩니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-mysql"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "mysql_connection_usage_percent{instance_group_name=\"mysql-team1\"}",
+              "legendFormat": "{{replication_role}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-mysql"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 12,
+            "y": 16,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "fillOpacity": 8,
+                "lineWidth": 2,
+                "showPoints": "never",
+                "gradientMode": "opacity"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "gauge",
+          "title": "DB 디스크",
+          "description": "데이터가 쌓이는 디스크입니다. 차면 쓰기가 멈춥니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-mysql"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "mysql_defaultstorage_disk_used_percent{instance_group_name=\"mysql-team1\"}",
+              "legendFormat": "{{replication_role}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-mysql"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 18,
+            "y": 16,
+            "w": 6,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 75
+                  },
+                  {
+                    "color": "red",
+                    "value": 90
+                  }
+                ]
+              },
+              "max": 100,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdMarkers": true
+          }
+        },
+        {
+          "id": 14,
+          "type": "row",
+          "title": "캐시와 입구 — 카카오가 운영하는 부분",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "MemStore(캐시) CPU · 메모리",
+          "description": "세션과 임시 데이터를 담아 두는 곳입니다(catchap-valkey-prod). 두 대가 짝을 이룹니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-memstore"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "cpu_usage{cluster_name=\"catchap-valkey-prod\"}",
+              "legendFormat": "CPU {{instance_id}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-memstore"
+              }
+            },
+            {
+              "refId": "B",
+              "expr": "mem_usage{cluster_name=\"catchap-valkey-prod\"}",
+              "legendFormat": "메모리 {{instance_id}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-memstore"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 0,
+            "y": 23,
+            "w": 8,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "fillOpacity": 8,
+                "lineWidth": 2,
+                "showPoints": "never",
+                "gradientMode": "opacity"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 70
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "id": 16,
+          "type": "stat",
+          "title": "캐시 적중률",
+          "description": "물어본 것 중 캐시에 있던 비율입니다. 낮으면 DB 를 그만큼 더 두드리게 됩니다. 트래픽이 없으면 0으로 보일 수 있습니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-memstore"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "memstore_keyspace_hitrate_percent{cluster_name=\"catchap-valkey-prod\"}",
+              "legendFormat": "{{instance_id}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-memstore"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 8,
+            "y": 23,
+            "w": 8,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 50
+                  },
+                  {
+                    "color": "green",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "text": {
+              "valueSize": 36
+            }
+          }
+        },
+        {
+          "id": 17,
+          "type": "stat",
+          "title": "입구(로드밸런서)의 정상 대상 수",
+          "description": "★우리 LB 만 고릅니다(catchap-lb-2a·2b). 2조 자원이 같은 창구로 오기 때문입니다. 0이 되면 그 건물로 들어온 손님이 갈 곳이 없습니다.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "kc-lb"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "lb_healthy_host_count{lb_name=~\"catchap-.*\"}",
+              "legendFormat": "{{lb_name}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "kc-lb"
+              }
+            }
+          ],
+          "gridPos": {
+            "x": 16,
+            "y": 23,
+            "w": 8,
+            "h": 6
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "text": {
+              "valueSize": 36
+            }
+          }
+        },
+        {
+          "id": 18,
+          "type": "row",
+          "title": "이 화면을 읽는 법",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 29,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "id": 19,
+          "type": "text",
+          "title": "",
+          "gridPos": {
+            "x": 0,
+            "y": 30,
+            "w": 24,
+            "h": 9
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "### 색이 뜻하는 것\n**초록** 그대로 두면 됩니다 · **노랑** 봐 둘 것 · **빨강** 지금 손대야 합니다\n\n### 여기 없는 것 두 가지\n- **GPU 사용률·VRAM** — 운영 콘솔(`/ops/monitoring`)에서 봅니다.\n  GPU 서버는 쿠버네티스 밖에 있어 프로메테우스가 걷어가지 못하고,\n  그 서버가 백엔드로 직접 밀어넣는 구조입니다.\n- **컨트롤 플레인(etcd·스케줄러 등)** — 카카오가 운영하는 부분이라 우리가 볼 수 없습니다.\n  기본 대시보드에 자리는 있지만 값이 비는 것이 정상입니다.\n\n### 관리형 지표는 프로젝트 전체가 옵니다\n데이터베이스·캐시·입구 지표는 **2조 자원까지 같은 창구로 옵니다.**\n이 화면의 모든 조회에는 우리 것만 고르는 조건이 들어 있습니다\n(`lb_name=~\"catchap-.*\"` · `instance_group_name=\"mysql-team1\"` ·\n`cluster_name=\"catchap-valkey-prod\"`).\n**직접 조회를 만들 때 이 조건을 빼면 남의 자원이 섞입니다.**\n\n### 값이 안 보일 때\n표시 기간을 **최근 30분** 이상으로 잡아 보세요. 관리형 지표는 1분 간격이라\n너무 짧은 구간에서는 점이 없을 수 있습니다."
+          }
+        }
+      ]
+    }

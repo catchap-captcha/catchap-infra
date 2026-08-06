@@ -1,0 +1,21 @@
+# 비밀값 — 절대 커밋하지 않습니다
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*_rsa
+*_ed25519
+kubeconfig*
+
+# 캡처 이미지 — 무거워서 git 에 안 넣습니다 (원본은 작업 PC 인프라-캡처/)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+*.zip
+
+# 도구 찌꺼기
+.DS_Store
+Thumbs.db

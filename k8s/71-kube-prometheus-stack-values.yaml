@@ -1,0 +1,341 @@
+# kube-prometheus-stack 설정 — CatChap 새 환경(관리형 Kubernetes Engine)
+#
+# 설치
+#   helm install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f 71-kube-prometheus-stack-values.yaml
+#
+# ★관리형 클러스터라 기본값 그대로 깔면 안 되는 자리가 넷 있다. 아래 ⚠️ 표시.
+
+# ─────────────────────────────────────────────────────────────
+# ⚠️① 컨트롤 플레인은 우리가 못 본다 — 켜 두면 「타깃 down」 경보가 계속 뜬다
+#     관리형이라 etcd·scheduler·controller-manager 에 접근할 수 없다.
+#     카카오가 운영하는 부분이고, 우리 책임 밖이다.
+# ─────────────────────────────────────────────────────────────
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false          # ★kube-proxy 는 있지만 지표 포트가 안 열려 있다
+
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+# ─────────────────────────────────────────────────────────────
+# ② 프로메테우스 — 지표를 모으고 저장한다
+# ─────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 15d          # ★보존 기간. 늘리면 디스크도 같이 늘려야 한다
+    retentionSize: 18GB     # ★디스크가 꽉 차기 전에 스스로 지우게 (20Gi 중 18GB)
+
+    # ★우리가 만든 ServiceMonitor 를 라벨 없이도 다 줍는다.
+    #   기본값은 「차트가 붙인 라벨이 있는 것만」이라 우리 앱을 놓친다.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: csi-cinder-sc-wait   # ★AZ 를 따라가는 클래스 (70-storageclass-wait.yaml)
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
+
+    resources:
+      requests: {cpu: 300m, memory: 1500Mi}
+      limits:   {cpu: "1",  memory: 3Gi}
+
+# ─────────────────────────────────────────────────────────────
+# ③ 그라파나 — 보는 화면
+# ─────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+
+  # ★기본 비밀번호(prom-operator)를 쓰지 않는다. 미리 만든 시크릿을 참조한다.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+
+  persistence:
+    enabled: true
+    storageClassName: csi-cinder-sc-wait
+    size: 5Gi
+
+  # ★그라파나를 열면 「CatChap 한눈에」가 ★먼저 뜨게 한다 (0806)
+  #   기본값은 그라파나 소개 화면인데, 대시보드가 25개나 깔려 있어서
+  #   ★정작 볼 화면을 매번 찾아 들어가야 했다.
+  #   경로의 정체 — 사이드카가 `grafana_dashboard: "1"` 딱지가 붙은 ConfigMap 을
+  #   /tmp/dashboards 아래에 파일로 떨궈 준다. 그 파일을 시작 화면으로 지정한다.
+  #   ⚠️파일 이름은 ConfigMap 의 ★키 이름이다(73-그라파나-대시보드-catchap.yaml 의
+  #     `catchap-overview.json`). 키를 바꾸면 이 줄도 같이 바꿔야 한다.
+  grafana.ini:
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/catchap-overview.json
+    date_formats:
+      default_timezone: Asia/Seoul
+
+  # ⚠️② 인터넷에 노출하지 않는다. 당분간 kubectl port-forward 로만 본다.
+  #     인그레스로 열려면 ★인증을 먼저 붙여야 한다(지금 인그레스엔 인증이 없다).
+  service:
+    type: ClusterIP
+
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits:   {cpu: 500m, memory: 512Mi}
+
+  # ══════════════════════════════════════════════════════════════════
+  # ★카카오 Metric Export — 관리형 서비스 지표 (0806 연결)
+  #
+  # ★왜 필요한가 — 프로메테우스는 ★관리형 서비스 안을 못 봅니다.
+  #   MySQL·MemStore·로드밸런서는 카카오가 운영하는 물건이라 우리가 긁을 수가 없습니다.
+  #   카카오가 그 지표를 ★Prometheus HTTP API 호환 창구로 열어 둬서, 그라파나에
+  #   데이터소스로 그냥 붙습니다.
+  #
+  # ★service-type 헤더가 서비스를 고릅니다 — 그래서 ★서비스마다 데이터소스가 하나씩입니다.
+  #   (하나로 묶을 수 없습니다. 헤더값이 다르기 때문입니다)
+  #
+  # ⚠️QSS(질의한 표본 수) 기반 ★과금입니다. timeInterval 60s 로 최소 간격을 잡아 둡니다.
+  # ⚠️★프로젝트 전체가 보입니다 — 2조 자원까지 옵니다. 대시보드·경보에서 우리 것만
+  #   골라야 합니다(예: lb_id 로 필터). 0806 실측에서 2조 로드밸런서가 같이 나왔습니다.
+  #
+  # ══════════════════════════════════════════════════════════════════
+  # ★★이 자격증명만 금고(Secrets Manager)가 아니라 K8s 시크릿에 둡니다 — 그 이유
+  #
+  #   우리 원칙은 "비밀값은 금고에, K8s 에는 열쇠 두 줄만" 입니다(00-아키텍처-설계 2-E).
+  #   여기는 ★일부러 예외로 뒀습니다. 안 적어 두면 나중에 "일관성이 없다"는 지적이
+  #   나오고, 그때 이유를 아무도 모릅니다.
+  #
+  #   ① 금고를 써도 K8s 시크릿이 안 없어집니다
+  #      금고를 열려면 ★열쇠가 필요하고 그 열쇠를 K8s 시크릿에 둬야 합니다.
+  #      "K8s 에 비밀값을 안 둔다"는 달성 불가능하고, 실제 문제는 "무엇을 두느냐"입니다.
+  #   ② 바꿔 넣어도 줄어드는 게 없습니다
+  #      백엔드는 13건을 금고로 모아 관리가 크게 줄었습니다. 여기는 ★2줄이라
+  #      금고를 거쳐도 K8s 시크릿이 2줄 → 2줄 그대로입니다.
+  #   ③ ★위험도가 다릅니다 — 가장 큰 이유
+  #      이 키는 ★조회 전용(Reader) 하나뿐입니다. 침해돼도 지표만 읽힙니다.
+  #      0806 실측: 이 키로 시크릿 값 읽기 시도 → ★403 (ForbiddenAccess)
+  #   ④ 유지보수가 따라옵니다
+  #      금고에서 읽으려면 그라파나에 init 컨테이너를 덧대야 하는데, 그건 남이 만든
+  #      Helm 차트 위에 우리가 얹는 것입니다. 차트를 올릴 때마다 확인해야 합니다.
+  #
+  # ⬜★(나) 금고 방식으로 ★바꿔야 할 때 — 미리 정해 둡니다
+  #      · 이 키에 ★쓰기 권한이 붙게 되면
+  #      · 그라파나가 다른 민감한 것을 다루게 되면
+  #      · 그라파나를 ★인터넷에 열게 되면
+  # ⬜키 회전 목록에 catchap-monitor-key 를 넣을 것
+  # ══════════════════════════════════════════════════════════════════
+  envValueFrom:
+    KC_CRED_ID:
+      secretKeyRef: {name: kakaocloud-metric-export, key: KC_CRED_ID}
+    KC_CRED_SECRET:
+      secretKeyRef: {name: kakaocloud-metric-export, key: KC_CRED_SECRET}
+
+  additionalDataSources:
+    - name: KakaoCloud-MySQL
+      uid: kc-mysql
+      type: prometheus
+      access: proxy
+      url: &kcurl https://monitoring.kr-central-2.kakaocloud.com/metric-export/grafana/5f428f1b341249c983ab19c6f8f3fdb4/prometheus
+      editable: false
+      jsonData: &kcjson
+        httpHeaderName1: Credential-ID
+        httpHeaderName2: Credential-Secret
+        httpHeaderName3: service-type
+        timeInterval: 60s
+      secureJsonData:
+        httpHeaderValue1: $KC_CRED_ID
+        httpHeaderValue2: $KC_CRED_SECRET
+        httpHeaderValue3: mysql
+
+    - name: KakaoCloud-MemStore
+      uid: kc-memstore
+      type: prometheus
+      access: proxy
+      url: *kcurl
+      editable: false
+      jsonData: *kcjson
+      secureJsonData:
+        httpHeaderValue1: $KC_CRED_ID
+        httpHeaderValue2: $KC_CRED_SECRET
+        httpHeaderValue3: memstore
+
+    - name: KakaoCloud-LoadBalancer
+      uid: kc-lb
+      type: prometheus
+      access: proxy
+      url: *kcurl
+      editable: false
+      jsonData: *kcjson
+      secureJsonData:
+        httpHeaderValue1: $KC_CRED_ID
+        httpHeaderValue2: $KC_CRED_SECRET
+        httpHeaderValue3: lb
+
+    # VM·GPU — ⚠️지금은 크레딧 2종만 옵니다. GPU 서버에 카카오 모니터링 에이전트를
+    # 깔면 CPU·메모리·디스크·nvidia_smi_* 가 여기로 들어옵니다.
+    - name: KakaoCloud-VM
+      uid: kc-vm
+      type: prometheus
+      access: proxy
+      url: *kcurl
+      editable: false
+      jsonData: *kcjson
+      secureJsonData:
+        httpHeaderValue1: $KC_CRED_ID
+        httpHeaderValue2: $KC_CRED_SECRET
+        httpHeaderValue3: server
+
+# ─────────────────────────────────────────────────────────────
+# ④ 알림 — 임계를 넘으면 알린다
+# ─────────────────────────────────────────────────────────────
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: csi-cinder-sc-wait
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+    resources:
+      requests: {cpu: 50m,  memory: 128Mi}
+      limits:   {cpu: 200m, memory: 256Mi}
+    # ★비밀값을 이 파일에 적지 않는다 — 시크릿을 파일로 붙여 경로만 가리킨다.
+    #   붙는 자리: /etc/alertmanager/secrets/alertmanager-smtp/<열쇠이름>
+    secrets:
+      - alertmanager-smtp
+
+  # ══════════════════════════════════════════════════════════════════
+  # ★★받는 곳 (0806) — 그전까지는 receiver 가 "null" 이라 ★전부 버려지고 있었다.
+  #
+  # ★두 갈래로 보낸다. 왜 하나가 아닌가 —
+  #   ① 웹훅 → 우리 백엔드 → ★운영자 명단대로 콘솔 벨 + 메일
+  #      Alertmanager 설정은 K8s 파일이라 DB 를 못 읽는다. 백엔드를 거쳐야
+  #      운영자가 들어오고 나가는 것이 반영되고, 사람마다 수신을 끌 수도 있다.
+  #   ② ★급함만 Alertmanager 가 ★직접 메일도
+  #      ①은 백엔드가 죽으면 같이 죽는다. 그런데 '백엔드가 죽었다'가 제일 알아야 할
+  #      경보다. 그래서 급함은 백엔드를 거치지 않는 길도 하나 둔다.
+  #
+  # ⚠️②의 받는 주소는 ★한 사람뿐이다(운영 담당). Alertmanager 는 DB 를 못 읽어
+  #   명단을 따라갈 수 없다. 이건 '아무도 못 받는' 상황을 막는 안전망이지
+  #   정식 통보 경로가 아니다 — 정식 경로는 ①이다.
+  # ══════════════════════════════════════════════════════════════════
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: smtp.gmail.com:587
+      smtp_from: catchap5@catchap5.com
+      smtp_auth_username: 09.daviya.09@daviya.kr
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/SMTP_APP_PASSWORD
+      smtp_require_tls: true
+
+    route:
+      receiver: catchap-backend
+      # 같은 경보를 같은 대상별로 묶는다 — 파드 8개가 동시에 넘쳐도 알림은 묶음 하나다.
+      group_by: [alertname, namespace]
+      group_wait: 30s         # 첫 경보 뒤 30초 더 기다렸다가 같이 온 것을 묶는다
+      group_interval: 5m      # 묶음에 새 식구가 생기면 5분 뒤에 다시
+      repeat_interval: 12h    # 안 고치면 12시간마다 다시 (경고 기준)
+      routes:
+        # ⬜Watchdog — ★항상 울리도록 만들어진 감시용 경보. 이게 안 오면 경보 체계가
+        #   죽은 것이다. 지금은 버린다. ⬜나중에 '조용하면 알려주는' 외부 감시를 붙이면
+        #   그때 이 줄을 그쪽으로 돌린다(deadman switch).
+        - receiver: "null"
+          matchers: [ alertname = "Watchdog" ]
+        # InfoInhibitor 등 severity 가 none 인 도우미 경보 — 사람에게 보낼 내용이 아니다.
+        - receiver: "null"
+          matchers: [ severity = "none" ]
+        # 참고(info) — 잡음이 많다. 백엔드로만 보내 ★콘솔 벨에는 남기고 메일은 안 보낸다
+        # (메일 여부는 백엔드가 심각도로 판단한다 — app/api/v1/endpoints/alerts.py).
+        - receiver: catchap-backend
+          matchers: [ severity = "info" ]
+        # ★급함 — 백엔드 경유 + 직접 메일. 반복 주기도 짧게.
+        - receiver: catchap-critical
+          matchers: [ severity = "critical" ]
+          repeat_interval: 1h
+
+    receivers:
+      - name: "null"
+
+      - name: catchap-backend
+        webhook_configs:
+          # ★클러스터 안 주소다. 밖으로 나갔다 오지 않는다(로드밸런서·DNS 에 안 기댄다).
+          - url: http://backend-api.catchap.svc.cluster.local:8000/api/v1/internal/alerts
+            send_resolved: true
+            max_alerts: 20   # 한 번에 너무 많이 보내 본문이 터지지 않게
+            http_config:
+              # ⚠️Alertmanager 웹훅은 ★임의 헤더를 못 넣는다(basic_auth·authorization·oauth2만).
+              #   그래서 백엔드가 X-Metrics-Token 과 ★Bearer 를 둘 다 받도록 해 뒀다.
+              authorization:
+                type: Bearer
+                credentials_file: /etc/alertmanager/secrets/alertmanager-smtp/WEBHOOK_TOKEN
+
+      - name: catchap-critical
+        webhook_configs:
+          - url: http://backend-api.catchap.svc.cluster.local:8000/api/v1/internal/alerts
+            send_resolved: true
+            max_alerts: 20
+            http_config:
+              authorization:
+                type: Bearer
+                credentials_file: /etc/alertmanager/secrets/alertmanager-smtp/WEBHOOK_TOKEN
+        email_configs:
+          - to: 09.daviya.09@daviya.kr
+            send_resolved: true
+            headers:
+              Subject: '[CatChap 급함] {{ .CommonLabels.alertname }} ({{ .Alerts | len }}건)'
+            html: |
+              <p><b>{{ .Status | toUpper }}</b> — 급한 경보입니다.</p>
+              {{ range .Alerts }}
+              <p>· {{ .Annotations.summary }}<br>
+                 <small>{{ .Annotations.description }}</small><br>
+                 <small>대상: {{ range $k, $v := .Labels }}{{ $k }}={{ $v }} {{ end }}</small></p>
+              {{ end }}
+              <p><small>★이 메일은 백엔드를 거치지 않는 예비 경로입니다.
+              평소 통보는 운영 콘솔의 알림(벨)과 그 메일로 갑니다.</small></p>
+
+# ─────────────────────────────────────────────────────────────
+# ⚠️③ node-exporter — ★카카오가 이미 깔아 둔 것이 있다
+#     kube-system/ke-prometheus-node-exporter · hostNetwork · 포트 ★59100
+#     우리 것은 포트 ★9100 을 쓰므로 ★충돌하지 않는다(실측: 9100 비어 있음).
+#
+#     ★그래도 우리 것을 켜는 이유 —
+#       · 카카오 것은 카카오가 관리해서 언제 바뀔지 모른다 (버전도 v1.6.0 으로 오래됐다)
+#       · 기본 대시보드가 기대하는 라벨(job·release)이 카카오 것엔 없다
+#       · node-exporter 는 아주 가볍다 (메모리 30MB 수준)
+# ─────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 30m, memory: 32Mi}
+    limits:   {cpu: 100m, memory: 64Mi}
+
+# ─────────────────────────────────────────────────────────────
+# ⑤ kube-state-metrics — 파드·디플로이의 ★상태를 지표로 바꿔 준다
+#    (몇 벌이 떠 있나 / 재시작이 몇 번 났나 — node-exporter 는 이걸 모른다)
+# ─────────────────────────────────────────────────────────────
+kubeStateMetrics:
+  enabled: true
+kube-state-metrics:
+  resources:
+    requests: {cpu: 30m, memory: 128Mi}
+    limits:   {cpu: 200m, memory: 256Mi}
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m,  memory: 128Mi}
+    limits:   {cpu: 200m, memory: 256Mi}

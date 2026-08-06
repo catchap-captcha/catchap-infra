@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: captcha-api
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: captcha
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: captcha
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # ★★maxUnavailable 을 0 에서 1 로 바꿨다 (0804 실측).
+      #   안티어피니티로 "같은 노드 금지"를 걸면, 노드 2대에 파드 2벌인 상태에서
+      #   maxUnavailable:0 은 **영원히 Pending** 이 된다 —
+      #   옛 파드가 두 노드를 다 차지해 새 파드가 앉을 자리가 없는데,
+      #   옛 파드를 먼저 안 내리기 때문이다. 서로 기다린다.
+      #   → 노드가 2대인 한 "무중단 배포"와 "노드 분리"는 동시에 안 된다.
+      #     노드 분리를 골랐다. 배포는 우리가 고르는 순간이고 노드 장애는 안 고른다.
+      #   ⚠️배포 중 몇십 초 동안 1벌로 받는다. 로드밸런서가 준비 안 된 파드로는
+      #     안 보내므로 끊기지는 않는다.
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: captcha
+    spec:
+      # ★저장소가 비공개다. 이게 없으면 ImagePullBackOff 로 멈춘다.
+      imagePullSecrets:
+        - name: catchap-registry
+      # ★★같은 노드에 두 벌이 붙는 것을 금지한다 (0804 프론트에서 실측으로 배운 것).
+      #   topologySpreadConstraints 는 **놓을 때만** 보고 놓은 뒤에는 안 고친다.
+      #   ⚠️노드가 1대만 남으면 두 번째 파드는 Pending 이 된다.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: captcha
+      # 영역 균형은 "되도록"으로 남긴다.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: captcha
+      containers:
+        - name: captcha
+          # ★★0805 저녁 — 위젯을 갱신해 다시 구웠습니다.
+          #
+          #   앱 코드(app/)는 ★지문이 같았습니다 — 옛 GPU /srv/codex-workspaces/ms/swc 와 일치.
+          #   바뀐 것은 ★위젯(static/dist) 하나입니다. 팀이 오늘 17:32 에 새로 빌드했고
+          #   그 시각에 서버 캡차가 재기동됐습니다(17:33).
+          #
+          #     dist/assets/index-DZF2VF9K.js  212,549   ← 파일명부터 바뀜
+          #     dist/widget.js                   2,205   (옛것 1,526)
+          #
+          # ★앱이 쓰는 것은 STATIC_DIR 기본값 = static/dist 입니다(config.py:92).
+          #   옛 이미지에는 안 쓰이는 잔재(app.js·index.html·styles.css)가 있어 ★통째로 교체했습니다.
+          #   ⚠️GPU 의 static 에는 백업 폴더가 6개(dist.*.bak) 있어 ★제외하고 가져왔습니다.
+          #
+          # ⚠️태그가 이미지 ID 입니다. 앞 태그(e802e05a2ad2)는 커밋 해시였는데,
+          #   위젯 빌드 결과물이 git 에 없어서 이번엔 커밋으로 못 가리킵니다.
+          #   → 저장소를 정리하면 커밋 해시로 되돌립니다.
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-captcha-repo/catchap-captcha:d519323cdfe0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: captcha-config
+            - secretRef:
+                name: captcha-secret
+          # ★/health/live 는 "살아 있나", /health/ready 는 "받을 준비가 됐나".
+          #   ready 가 DB 를 보므로 DB 가 끊기면 트래픽을 안 받는다(죽이지는 않는다).
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # ★기동할 때 스키마를 만든다(GET_LOCK 으로 두 벌이 동시에 해도 안전).
+          #   그 사이 준비가 늦을 수 있어 startupProbe 로 넉넉히 기다린다.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24   # 최대 2분
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              memory: "768Mi"
+          volumeMounts:
+            # ★검증 요청마다 data/runtime 아래에 행동 이벤트 JSON 을 쓴다.
+            #   읽는 코드는 없다(쓰기 전용). 그래서 파드마다 따로 둬도 동작에 문제가 없다.
+            #   ⚠️다만 파드가 죽으면 사라지고, 파드마다 흩어진다. 아래 README 참고.
+            - name: runtime
+              mountPath: /app/data/runtime
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: runtime
+          emptyDir:
+            sizeLimit: 512Mi

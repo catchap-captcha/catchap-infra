@@ -1,0 +1,21 @@
+# ★이름이 `behavior-ai` 여야 한다. 캡차가 이 이름으로 부른다.
+#     k8s/captcha/10-configmap.yaml
+#       BEHAVIOR_AI_URL: "http://behavior-ai.catchap.svc.cluster.local:8010"
+#
+# ★ClusterIP = 클러스터 **안에서만** 보인다. 밖에서는 못 부른다.
+#   행동 판별기는 사용자가 직접 부를 일이 없고, 캡차만 부른다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: behavior-ai
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: behavior-ai
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: behavior-ai
+  ports:
+    - name: http
+      port: 8010
+      targetPort: http
