@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: catchap-backend
+  namespace: argocd
+  finalizers:
+    # ★앱을 지울 때 만들어 둔 것도 같이 지웁니다. 실수로 지우면 서비스가 내려가니
+    #   지우기 전에 반드시 무엇이 딸려 있는지 확인하세요.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/catchap-captcha/catchap-infra.git
+    targetRevision: main
+    path: k8s/backend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: catchap
+  syncPolicy:
+    # ★자동 동기화를 ★끄고 시작합니다 — 화면에서 Sync 를 눌러야 반영됩니다.
+    #   무엇이 어떻게 바뀌는지 눈으로 본 뒤에 automated 를 켭니다.
+    #
+    # automated:
+    #   prune: false      ← ★git 에 없는 것을 지우는 기능. 손으로 만든 Secret 4개가
+    #                        날아가므로 안정될 때까지 반드시 false 로 둡니다.
+    #   selfHeal: false
+    syncOptions:
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    # 이미지 태그는 CI 가 매니페스트를 고쳐서 바꿉니다.
+    # replicas 는 HPA 가 건드릴 수 있어 차이를 무시합니다.
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
