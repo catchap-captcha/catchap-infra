@@ -54,8 +54,14 @@ kubectl label secret infra-repo -n argocd argocd.argoproj.io/secret-type=reposit
 rm -f argocd-infra
 ```
 
-⚠️이 방법을 쓰면 `app-*.yaml` 의 `repoURL` 을 `git@github.com:...` 형태로 바꿔야 합니다.
-토큰(PAT)을 쓰실 거면 `https://` 그대로 두고 `username`/`password` 로 넣습니다.
+★**0807 에 이 방식으로 했습니다.** `app-*.yaml` 의 `repoURL` 은 전부
+`git@github.com:catchap-captcha/catchap-infra.git` (SSH) 입니다 —
+Deploy key 는 **SSH 로만** 동작하므로 `https://` 와 섞으면 ArgoCD 가 자격을 못 찾습니다.
+
+⚠️**조직 정책이 Deploy key 를 기본으로 끄고 있습니다.**
+`조직 Settings → Deploy keys → Enabled` 로 켠 뒤에야 저장소에 등록할 수 있습니다.
+
+★토큰(PAT)을 쓰실 거면 `https://` 그대로 두고 `username`/`password` 로 넣습니다.
 
 ## 화면 열기
 
