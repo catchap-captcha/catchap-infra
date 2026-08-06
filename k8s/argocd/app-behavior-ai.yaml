@@ -13,14 +13,16 @@ spec:
     repoURL: git@github.com:catchap-captcha/catchap-infra.git
     targetRevision: main
     path: k8s/behavior-ai
+    # ★.예시 로 끝나는 파일은 절대 적용하지 않습니다.
+    #   ArgoCD 는 경로 안의 모든 yaml 을 적용하므로, 예시 시크릿이 섞여 있으면
+    #   ★살아 있는 비밀값을 "여기에-넣지-말-것" 으로 갈아치웁니다 (0807 에 직전에 발견).
+    #   ⚠️자리가 중요합니다 — ★source 아래입니다.
+    #     destination 아래에 두면 쿠버네티스가 unknown field 로 ★거부합니다.
+    directory:
+      exclude: '{*.예시.yaml,*.yaml.예시}'
   destination:
     server: https://kubernetes.default.svc
     namespace: catchap
-    # ★.예시 로 끝나는 파일은 절대 적용하지 않는다.
-    #   ArgoCD 는 경로 안의 모든 yaml 을 적용하므로, 예시 시크릿이 섞여 있으면
-    #   ★살아 있는 비밀값을 "여기에-넣지-말-것" 으로 갈아치운다 (0807 에 직전에 발견).
-    directory:
-      exclude: '{*.예시.yaml,*.yaml.예시}'
   syncPolicy:
     # ★자동 동기화를 ★끄고 시작합니다 — 화면에서 Sync 를 눌러야 반영됩니다.
     #   무엇이 어떻게 바뀌는지 눈으로 본 뒤에 automated 를 켭니다.
