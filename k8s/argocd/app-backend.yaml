@@ -36,13 +36,28 @@ spec:
     #   ★무엇이 달라지나 — 병합하면 사람이 Sync 를 안 눌러도 서버가 따라옵니다.
     #   ★되돌리기 — catchap-infra 에서 커밋 하나 revert 하면 옛 태그로 돌아옵니다.
     automated:
-      # ⚠️★★prune 은 반드시 false 로 둡니다.
-      #   prune = git 에 없는 것을 서버에서 지우는 기능인데, 우리 클러스터에는
-      #   git 에 없는 Secret 이 4개 있습니다(backend-secret · behavior-ai-secret ·
-      #   captcha-secret · catchap-registry). 켜면 그 넷이 사라지고 앱이 전부 죽습니다.
-      #   ⬜켜려면 Secret 을 먼저 git 으로 옮겨야 합니다
-      #      → 92-킵-대기/10-Secret을-git으로-External-Secrets.md
-      prune: false
+      # ✅★2026-08-08 prune 을 켭니다.
+      #
+      #   ★전에 적어 둔 「켜면 손으로 만든 Secret 4개가 날아간다」는 ★틀렸습니다.
+      #   버려도 되는 네임스페이스에서 실제로 시험해 확인했습니다.
+      #
+      #     조건   git 경로에 매니페스트 0개 + prune 켬  (가장 사나운 조건)
+      #     결과   표시 없는 Secret        → ★살아남음
+      #            표시 있는 Secret(대조군) → ★지워짐   ← prune 이 실제로 돌았다는 증거
+      #
+      #   ★prune 은 ArgoCD 가 「자기 것」으로 아는 자원만 지웁니다.
+      #     우리 Secret 4개(backend·captcha·behavior-ai·registry)는 손으로 만들어서
+      #     tracking-id 주석도 instance 라벨도 없습니다. 앱의 자원 목록에 아예 없습니다.
+      #
+      #   ★켜기 전 확인 — 추적 자원 16개 전부 Synced · requiresPruning ★0건.
+      #     즉 켜는 순간 지워지는 것이 하나도 없습니다.
+      #
+      #   ★덤으로 알게 된 것 — 모든 자원이 지워질 상황이면 ArgoCD 가 자동 동기화를
+      #     스스로 거부합니다 ("auto-sync will wipe out all resources").
+      #
+      #   ⚠️★네임스페이스만은 따로 못을 박았습니다 — k8s/captcha/00-namespace.yaml 에
+      #     Prune=false. 그것이 지워지면 안의 것이 전부 같이 사라지기 때문입니다.
+      prune: true
       # ⚠️selfHeal = 사람이 kubectl 로 고친 것을 git 대로 되돌리는 기능.
       #   급할 때 손으로 막는 길을 남겨 두려고 아직 끕니다. 안정되면 켭니다.
       selfHeal: false
