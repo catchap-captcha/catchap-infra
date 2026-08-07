@@ -128,6 +128,21 @@ data:
   # ★화면에 보이는 발신자. 로그인 계정과 달라도 된다(별칭 send-as).
   MAIL_FROM: "catchap5@catchap5.com"
   MAIL_FROM_NAME: "CatChap"
+  # ★프로덕션에 있는데 여기 빠져 있던 값(0807 전수 대조에서 찾음). 기본값은 "" 이다.
+  MAIL_REPLY_TO: "no-reply@catchap5.com"
+
+  # ── SNS 로그인
+  # ⚠️★프로덕션은 카카오·네이버·구글 ★셋 다 켜져 있는데 새 환경은 ★셋 다 꺼져 있었다
+  #   (0807 /api/v1/auth/social/providers 로 양쪽을 두드려 확인).
+  #   provider 는 CLIENT_ID 가 있으면 켜진 것으로 본다 — 그 여섯 값은 ★비밀이라
+  #   Secrets Manager 로 간다. 여기 있는 것은 비밀이 아닌 콜백 주소뿐이다.
+  #   ⬜금고에 6개를 넣은 뒤 SECRETS_NAMES 에 이름을 더해야 실제로 켜진다.
+  SOCIAL_REDIRECT_URIS: "https://www.catchap5.com/auth/social/callback"
+
+  # ── 봇 판정
+  # ★프로덕션은 record(기록만) 인데 여기 없어서 코드 기본값 off 로 돌고 있었다.
+  #   off 면 의심 세션을 ★기록조차 안 한다 — 나중에 켤 때 근거가 될 데이터가 안 쌓인다.
+  BOT_ESCALATION_MODE: "record"
 
   # ── 결제
   # ★가짜 결제는 프로덕션에서 코드가 스스로 막지만, 설정으로도 꺼 둔다.
@@ -135,8 +150,17 @@ data:
   PAYMENT_SUCCESS_URL: "https://www.catchap5.com/payment/success"
   PAYMENT_FAIL_URL: "https://www.catchap5.com/payment/fail"
   PAYMENT_CANCEL_URL: "https://www.catchap5.com/payment/cancel"
+  # ★포트원 상점 식별자. 공개 값이라 여기 둔다(비밀은 catchap-portone-keys).
+  #   프로덕션에 있는데 여기 빠져 있었다 — 없으면 결제 승인이 안 된다.
+  PORTONE_STORE_ID: "store-af63494b-0374-429b-a9c2-8e6aa3be949c"
 
-  # ── 업로드 상한 (이미지 기본값과 같지만, 값이 보이는 게 낫다)
-  MAX_UPLOAD_BYTES: "2147483648"          # 2GB — 강의 영상
-  MAX_MATERIAL_UPLOAD_BYTES: "52428800"   # 50MB — 강의 자료
-  MAX_QUESTION_IMAGE_BYTES: "5242880"     # 5MB — 문제 이미지
+  # ── 업로드 상한
+  # ⚠️★여기 있던 값은 ★코드 기본값이었고 프로덕션과 달랐다(0807 전수 대조에서 찾음).
+  #   2026-08-05 에 프로덕션에서 셋 다 1TB 로 올렸는데, 그대로 컷오버했으면
+  #   ★영상 2GB · 자료 50MB · 문제이미지 5MB 로 되돌아갔을 것이다.
+  #
+  #   ★전역 1MB 상한(JSON 본문 메모리 고갈 방어)과 시간당 20회 제한은 ★그대로 둔다 —
+  #   그건 공개 캡차 API 가 표면이라 의도적으로 유지하기로 한 값이다.
+  MAX_UPLOAD_BYTES: "1099511627776"          # 1TB — 강의 영상
+  MAX_MATERIAL_UPLOAD_BYTES: "1099511627776" # 1TB — 강의 자료
+  MAX_QUESTION_IMAGE_BYTES: "1099511627776"  # 1TB — 문제 이미지
