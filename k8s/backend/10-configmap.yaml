@@ -37,11 +37,33 @@ data:
   #   URL 한 줄에 비밀번호가 섞여 있어 쪼갤 수가 없기 때문이다.
 
   # ── 미디어 (Object Storage)
-  MEDIA_STORAGE_BACKEND: "s3"
+  #
+  # ★값 두 개를 0807 에 고쳤다. 그전 값이면 미디어 기능이 ★전부 죽는다.
+  #
+  #   MEDIA_STORAGE_BACKEND
+  #     전 "s3"  →  후 ★"object"
+  #     app/services/media_storage.py:get_media_storage() 는 ★local | object 만 받는다.
+  #     "s3" 를 주면 그 함수가 곧바로
+  #        RuntimeError: MEDIA_STORAGE_BACKEND 값이 올바르지 않습니다: 's3' (local|object)
+  #     를 던진다. 강의 영상 업로드·재생·삭제, 시험 문항 이미지, 드래그 캡차 자산이
+  #     ★전부 이 함수를 거치므로 하나도 동작하지 않는다.
+  #     ⚠️기동은 정상이다 — 저장소를 ★쓸 때 처음 터진다. 그래서 여태 안 드러났다
+  #       (새 환경에 아직 트래픽이 없어 파드 로그에도 0건이었다).
+  #
+  #   MEDIA_KEY_PREFIX
+  #     전 ""    →  후 ★"media"
+  #     버킷에 이미 들어 있는 키가 ★media/lectures/<id>.mp4 형태다(이전 때 그렇게 올렸다).
+  #     코드는 lectures/<id>.mp4 로 찾으므로, 접두사가 비면 ★엉뚱한 자리를 본다.
+  #
+  # ★고친 값으로 실제 조회해서 확인했다 (2026-08-07, 파드 안에서 대조군 두 개로)
+  #     lectures/bd620548-…mp4  → media/lectures/bd620548-…mp4  → ★있음 232.4 MB
+  #     lectures/eaf12731-…mp4  → media/lectures/eaf12731-…mp4  → ★없음(아직 미이전)
+  #   양성·음성 대조가 둘 다 기대대로 나왔다.
+  MEDIA_STORAGE_BACKEND: "object"
   MEDIA_BUCKET: "catchap-storage-prod-team1"
   MEDIA_S3_ENDPOINT: "https://objectstorage.kr-central-2.kakaocloud.com"
   MEDIA_S3_REGION: "kr-central-2"
-  MEDIA_KEY_PREFIX: ""
+  MEDIA_KEY_PREFIX: "media"
 
   # ── 자막 생성기 (GPU 서버) — 클러스터 밖의 VM 이라 IP 로 부른다
   # ★이 주소는 catchap-gpu-2a(10.0.5.0/24) 안이다. 워커에서 도달되는 걸 실측했다.
