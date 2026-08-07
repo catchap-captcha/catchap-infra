@@ -41,6 +41,28 @@ data:
   MAX_ATTEMPTS: "3"
 
   # ── 이미지 안에 구워 둔 자산 경로
+  # ★문항 자산(이미지·조각)을 어디서 읽는가 — catchap-captcha 의 app/asset_storage.py
+  #
+  #   예전에는 367MB(8,238개)를 ★이미지에 구워 넣었다. 그 자산은 .gitignore 로 막혀 있어
+  #   git 에 없기 때문에 GitHub Actions 가 이미지를 굽지 못했다(COPY 가 "그런 파일 없음").
+  #   이제 오브젝트 스토리지에서 읽는다. 이미지가 367MB 작아지고, 자산이 바뀌어도
+  #   ★재빌드가 필요 없다.
+  #
+  #   ★백엔드의 MEDIA_* 와 같은 모양이다. 다른 방식을 새로 만들지 않는다.
+  #   ⚠️값이 틀리면 파드가 ★기동에서 바로 죽는다(조용히 로컬로 안 떨어진다).
+  #      0807 에 백엔드가 "s3" 오타로 미디어 기능이 전부 죽었는데 기동은 정상이라
+  #      로그에 한 줄도 안 남았던 일이 있었다. 그래서 일부러 시끄럽게 만들었다.
+  ASSET_STORAGE_BACKEND: "object"
+  ASSET_BUCKET: "catchap-storage-prod-team1"
+  # ★버킷 안 최상위 접두사. 백엔드 미디어(media/)와 겹치지 않게 따로 둔다.
+  ASSET_KEY_PREFIX: "captcha-service/final"
+  ASSET_S3_ENDPOINT: "https://objectstorage.kr-central-2.kakaocloud.com"
+  ASSET_S3_REGION: "kr-central-2"
+  # ★ASSET_S3_ACCESS_KEY · ASSET_S3_SECRET_KEY 는 여기 두지 않는다 →
+  #   captcha-secret 에 넣는다(전용 서비스 계정 catchap-captcha-assets 의 S3 키).
+
+  # ⬜ASSET_STORAGE_BACKEND=local 로 되돌리면 예전처럼 이 폴더를 읽는다.
+  #    다만 이미지에 자산이 없으므로 로컬에서만 의미가 있다.
   FINAL_DIR: "data/final"
   IMAGE_DIR: "data/processed"
   LABELING_DIR: "data/labeling"
