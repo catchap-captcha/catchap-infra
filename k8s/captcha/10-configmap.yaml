@@ -59,7 +59,7 @@ data:
   ASSET_S3_ENDPOINT: "https://objectstorage.kr-central-2.kakaocloud.com"
   ASSET_S3_REGION: "kr-central-2"
   # ★ASSET_S3_ACCESS_KEY · ASSET_S3_SECRET_KEY 는 여기 두지 않는다 →
-  #   captcha-secret 에 넣는다(전용 서비스 계정 catchap-captcha-assets 의 S3 키).
+  #   captcha-secret 에 넣는다(전용 서비스 계정 catchap-captcha-object-storage 의 S3 키).
 
   # ⬜ASSET_STORAGE_BACKEND=local 로 되돌리면 예전처럼 이 폴더를 읽는다.
   #    다만 이미지에 자산이 없으므로 로컬에서만 의미가 있다.
