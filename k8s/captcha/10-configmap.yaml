@@ -40,6 +40,37 @@ data:
   CHALLENGE_TTL_SECONDS: "60"
   MAX_ATTEMPTS: "3"
 
+  # ── ★★0808 추가 — 로드밸런서 뒤에서 진짜 사용자 IP 를 보게 한다
+  #
+  # 【무엇이 잘못돼 있었나】
+  #   main.py:211 의 client_ip() 는 trust_proxy 가 꺼져 있으면 request.client.host,
+  #   즉 ★바로 앞단(ingress 파드)의 주소를 봅니다. 그래서 ★모든 사용자가 한 사람이 됩니다.
+  #
+  #   ★실측(0808) — captcha_challenges_v2 2,996건에 서로 다른 client_ip_hash 가 ★5개뿐.
+  #     그 5개는 사용자가 아니라 인프라 주소(도커 브리지·노드)입니다. 2주치입니다.
+  #
+  # 【그래서 무엇이 깨져 있었나 — 두 가지입니다】
+  #   ① main.py:683  ip_challenges_1m >= max_challenges_per_minute → 429
+  #      ★분당 30건 제한이 사용자별이 아니라 ★전체 합계로 돕니다.
+  #      동시 사용자가 조금만 늘어도 ★전원이 "Too many CAPTCHA requests" 를 받습니다.
+  #   ② 봇 판별의 "같은 IP 에서 몰아치기" 신호가 ★항상 참이라 무의미해집니다.
+  #
+  # 【왜 켜도 안전한가 — 짐작이 아니라 확인했습니다】
+  #   client_ip() 는 X-Forwarded-For 의 ★맨 앞을 읽습니다. 보통은 사용자가 위조할 수 있는
+  #   자리라 위험하지만, 우리 경로에서는 앱에 도착하기 전에 두 번 걸러집니다.
+  #     · ingress nginx.conf  real_ip_recursive on · set_real_ip_from 10.0.0.0/16
+  #         → 오른쪽부터 훑어 ★신뢰 대역이 아닌 첫 주소를 고름 (위조한 맨 앞은 버려짐)
+  #     · ingress nginx.conf  proxy_set_header X-Forwarded-For ★$remote_addr
+  #         → 덧붙이지 않고 ★통째로 교체. 앱에 가는 XFF 는 ★값 하나뿐입니다.
+  #   ★위조 시험(0808) — 노트북에서 X-Forwarded-For: 203.0.113.99 을 붙여 두 LB 로 보냈고,
+  #     기록된 것은 203.0.113.99 이 아니라 ★진짜 공인 IP 였습니다.
+  #
+  # ⚠️전제 — 이 값은 ★ingress 뒤에 있을 때만 참입니다. 캡차를 인그레스 없이 노출하면
+  #    (NodePort 직결 등) 그 순간 사용자가 IP 를 위조할 수 있습니다.
+  # ★백엔드는 같은 문제를 uvicorn --proxy-headers 로 풀었습니다(catchap-backend Dockerfile).
+  #    캡차는 앱에 이미 스위치가 있어 그것을 씁니다 — 새 방식을 만들지 않습니다.
+  TRUST_PROXY: "true"
+
   # ── 이미지 안에 구워 둔 자산 경로
   # ★문항 자산(이미지·조각)을 어디서 읽는가 — catchap-captcha 의 app/asset_storage.py
   #
