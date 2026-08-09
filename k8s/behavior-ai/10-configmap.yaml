@@ -47,6 +47,15 @@ data:
   # ★엔드포인트는 코드 기본값과 같지만, 어디에 붙는지 보이는 게 낫다.
   SECRETS_IAM_ENDPOINT: "https://iam.kakaocloud.com/identity/v3"
   SECRETS_ENDPOINT: "https://secrets-manager-service.kr-central-2.kakaocloud.com"
+  # ★★부분 실패를 막는 관문 (2026-08-10 · catchap-behavior-ai #6)
+  #   ⚠️로더의 기존 검사는 ★전체 합계가 0일 때만 걸린다. 시크릿 4건 중 하나에서
+  #     키 이름이 바뀌거나 빠지면 나머지가 성공해 ★조용히 통과한다.
+  #     0810 에 실제로 재현했다 — DB_USER 가 DB_USERNAME 으로 들어간 시크릿을
+  #     흉내 냈더니 예외 없이 지나갔다.
+  #   ★여기 적은 변수가 하나라도 안 오면 로더가 예외를 던져 파드가 안 뜬다.
+  #     옛 파드가 계속 받으므로 서비스는 안 끊긴다 — 그게 옳은 실패다.
+  #   ⚠️금고에서 키를 뺄 때는 ★여기서도 같이 빼야 한다. 안 그러면 기동이 막힌다.
+  SECRETS_REQUIRED_VARS: "MYSQL_USER,MYSQL_PASSWORD,COLLECT_API_KEY,ADMIN_API_KEY,CAPTCHA_BACKEND_API_KEY"
 
   # ── 데이터베이스 (관리형 MySQL)
   # ★캡차와 같은 인스턴스, 다른 데이터베이스다. 이름 규칙도 캡차와 맞춘다.
