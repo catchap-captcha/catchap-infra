@@ -31,15 +31,58 @@ jobs:
           ACTOR: ${{ github.actor }}
           # ★checkout 을 안 하므로 git 로 제목을 못 읽는다. 이벤트에서 받는다.
           SUBJ: ${{ github.event.head_commit.message }}
+          # ★★2026-08-10 추가 — 판정을 actor 가 아니라 ★커밋 저자로 한다(아래 설명).
+          AUTHOR: ${{ github.event.head_commit.author.email }}
         run: |
           set -uo pipefail
 
-          # 봇이 올린 것은 넘어간다 (CI 가 이미지 태그를 고치는 경우 등)
-          case "$ACTOR" in
-            *"[bot]"|github-actions|dependabot)
-              echo "::notice::봇($ACTOR)이 올린 커밋이라 넘어갑니다."
-              exit 0 ;;
-          esac
+          # ══════════════════════════════════════════════════════════════
+          # 봇이 올린 것은 넘어간다 (배포 CI 가 이미지 태그를 고치는 경우)
+          # ══════════════════════════════════════════════════════════════
+          #
+          # ★★2026-08-10 실측 — 원래 여기서 `github.actor` 를 봤는데 ★한 번도 안 걸렸다.
+          #
+          #   배포 워크플로는 다른 저장소에서 ★Deploy key 로 push 한다. 그러면 이쪽
+          #   push 이벤트의 actor 가 봇이 아니라 ★키를 등록한 사람으로 잡힌다.
+          #   그래서 봇 배포마다 이 작업이 빨간불이 됐다 — 0808~0810 사이 ★13번.
+          #
+          #   ⚠️늘 빨간 감시 장치는 감시 장치가 아니다. 진짜 위반이 섞여도 안 보인다.
+          #
+          # ★고친 방법 — actor 대신 ★커밋 저자(commit author)를 본다.
+          #   배포 워크플로가 `git config user.email` 로 박아 넣는 값이고,
+          #   ★커밋 객체 안에 들어 있어 push 경로와 무관하다.
+          #
+          # ★★그리고 봇이라고 ★무조건 넘기지 않는다 — 「배포 봇이 해도 되는 일」만 넘긴다.
+          #   신원만 보면, 사람이 user.email 을 봇 주소로 맞추고 아무 코드나
+          #   밀어 넣어도 통과한다. 그래서 ★한 겹 더 본다.
+          #
+          #     ① 바꾼 파일이 `k8s/<앱>/30-deployment.yaml` ★뿐인가
+          #     ② 바뀐 줄이 `image:` ★뿐인가
+          #
+          #   둘 다 맞아야 넘긴다. 통과하려면 ★배포 봇이 하는 일과 똑같이 해야 한다.
+          #   (2026-08-10 에 진짜 커밋 5건으로 시험했다 — 봇 배포 2건은 넘어가고,
+          #    ★봇 신원인데 문서를 고친 커밋은 위반으로 잡히는 것까지 확인했다.)
+          #
+          # ⚠️앱 저장소(backend·captcha·behavior-ai·frontend)의 같은 파일은 ★안 고쳤다.
+          #   그쪽으로는 봇이 push 하지 않아 지금도 초록이고, 위 ①②는 이 저장소의
+          #   경로 규칙이라 그대로 옮기면 오히려 틀린다.
+          BOT_EMAIL='41898282+github-actions[bot]@users.noreply.github.com'
+          if [ "${AUTHOR:-}" = "$BOT_EMAIL" ]; then
+            if ! FILES=$(gh api "repos/$REPO/commits/$SHA" --jq '.files[].filename' 2>&1); then
+              echo "::warning::커밋 내용 조회에 실패했습니다. 판정하지 않고 넘어갑니다."
+              exit 0        # ★측정 실패를 위반으로 읽지 않는다
+            fi
+            BAD=$(printf '%s\n' "$FILES" | grep -vE '^k8s/[^/]+/30-deployment[.]yaml$' || true)
+            LINES=$(gh api "repos/$REPO/commits/$SHA" --jq '.files[].patch' | grep -E '^[+-][^+-]' || true)
+            NONIMAGE=$(printf '%s\n' "$LINES" | grep -vE '^[+-][[:space:]]*image:[[:space:]]' || true)
+            if [ -z "$BAD" ] && [ -z "$NONIMAGE" ]; then
+              echo "::notice::배포 봇의 이미지 태그 갱신이라 넘어갑니다."
+              exit 0
+            fi
+            echo "::warning::★봇 신원인데 배포 태그 갱신이 아닙니다. 사람이 올린 것으로 보고 확인합니다."
+            if [ -n "$BAD" ]; then echo '  매니페스트 밖 파일:'; printf '%s\n' "$BAD" | sed 's/^/    /'; fi
+            if [ -n "$NONIMAGE" ]; then echo '  image: 아닌 줄:'; printf '%s\n' "$NONIMAGE" | head -5 | sed 's/^/    /'; fi
+          fi
 
           # ★★2026-08-07 실측 — 한 번만 물으면 ★오탐이 난다.
           #
