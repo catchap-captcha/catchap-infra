@@ -1,10 +1,29 @@
 # ★★이 파일은 예시다. 실제 값을 여기에 적지 않는다. git 에도 올리지 않는다.
 #
+# ★★2026-08-10 — 비밀값을 ★금고(Secrets Manager)로 옮겼다.
+#   여기 남는 것은 ★부트스트랩 열쇠 두 줄뿐이다. 나머지 4개는 앱이 기동할 때
+#   금고에서 직접 읽는다(`catchap-behavior-ai/app/secrets_loader.py`).
+#
+#   ⚠️0805 에 이 파일은 *"behavior-ai 이미지에는 그 코드가 없다. 코드를 고쳐야 하므로
+#     이번 이전에서는 K8s Secret 으로 간다"* 고 적어 뒀다. ★그 코드를 넣었다.
+#
 #   kubectl -n catchap create secret generic behavior-ai-secret \
-#     --from-literal=MYSQL_PASSWORD='…' \
-#     --from-literal=CAPTCHA_BACKEND_API_KEY='…' \
-#     --from-literal=COLLECT_API_KEY='…' \
-#     --from-literal=ADMIN_API_KEY='…'
+#     --from-literal=SECRETS_ACCESS_KEY='…' \
+#     --from-literal=SECRETS_SECRET_KEY='…'
+#
+# ★값의 출처 — 서비스 계정 `catchap-behavior-ai` 의 IAM 액세스 키
+#   (인프라-캡처-비공개/자격증명.txt 1-9 절 · 2026-08-10 신설)
+#   그 계정은 `Secrets Manager 매니저` + `KMS 사용자` 이고
+#   ★kms11 접근 명단에 들어 있다(실제로 복호화되는 것을 확인했다).
+#
+# ⚠️★이 계정을 재생성하지 말 것 — 역할은 만든 뒤에 못 바꾸고, 새 계정은
+#   kms11 명단에 없어서 행동AI 가 기동하지 못한다.
+#
+# ── 금고로 옮긴 4개 (2026-08-10 · 값은 옛것 그대로 · ★회전이 아니라 이사)
+#   MYSQL_USER · MYSQL_PASSWORD → catchap-behavior-ai-db-account
+#   COLLECT_API_KEY             → catchap-behavior-ai-collect-key
+#   ADMIN_API_KEY               → catchap-behavior-ai-admin-key
+#   CAPTCHA_BACKEND_API_KEY     → catchap-service-bridge-key   ★캡차와 공유
 #
 # ── 열쇠 셋이 각각 다른 길을 지킨다 (이미지 안 코드에서 확인)
 #
@@ -12,24 +31,13 @@
 #     /challenge   CAPTCHA_BACKEND_API_KEY   app/api/challenge.py:28   ★캡차가 부르는 길
 #     /admin       ADMIN_API_KEY             app/api/admin.py:22
 #
-#   ★★`CAPTCHA_BACKEND_API_KEY` 는 캡차 쪽 `BEHAVIOR_AI_BACKEND_KEY` 와 **같은 값이어야
-#     한다.** 한쪽만 바꾸면 캡차→AI 호출이 전부 거절된다.
-#     (캡차: `k8s/captcha/20-secret.예시.yaml` 의 BEHAVIOR_AI_BACKEND_KEY)
+#   ★★`CAPTCHA_BACKEND_API_KEY` 는 캡차 쪽 `BEHAVIOR_AI_BACKEND_KEY` 와 **같은 값이다**
+#     (2026-08-10 sha256 대조로 확인). 한쪽만 바꾸면 캡차→AI 호출이 전부 거절된다.
+#     ★그래서 ★한 시크릿(`catchap-service-bridge-key`)에 두 이름으로 같이 넣었다.
+#     양쪽이 같은 시크릿을 읽으므로 이제 「한쪽만 바뀌는 일」이 구조적으로 안 생긴다.
 #
 #   ★비어 있으면 그 길이 **모든 요청을 거절**한다. 이미지 안 주석 그대로다 —
 #     *"missing secrets simply disable the guarded path"*. 조용히 통과시키지 않는다.
-#
-# ── 값을 어디서 가져오나
-#
-#     MYSQL_PASSWORD            자격증명.txt 2-3 (앱 계정 `catchap_ai_app`)
-#     ⬜ 나머지 셋               ★옛 서버 환경변수를 못 읽었다(안전장치에 막힘).
-#        → 캡차 쪽과 짝이 맞아야 하므로 **컷오버 때 양쪽을 같이 새로 만드는 것**을 권한다.
-#          어차피 캡차 README 102행에서 `CAPTCHA_SITE_SECRET` 회전을 권하고 있고,
-#          0805 에 그 값이 평문 `.env` 로 작업 폴더에 있는 것이 확인됐다.
-#
-# ⚠️Secrets Manager 로 옮기는 것을 검토할 것 — 백엔드는 이미 그렇게 한다
-#   (`app/core/secrets_loader.py`). behavior-ai 이미지에는 그 코드가 **없다.**
-#   코드를 고쳐야 하므로 이번 이전에서는 K8s Secret 으로 간다.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -37,7 +45,5 @@ metadata:
   namespace: catchap
 type: Opaque
 stringData:
-  MYSQL_PASSWORD: "여기에-넣지-말-것"
-  CAPTCHA_BACKEND_API_KEY: "여기에-넣지-말-것"
-  COLLECT_API_KEY: "여기에-넣지-말-것"
-  ADMIN_API_KEY: "여기에-넣지-말-것"
+  SECRETS_ACCESS_KEY: "여기에-넣지-말-것"
+  SECRETS_SECRET_KEY: "여기에-넣지-말-것"

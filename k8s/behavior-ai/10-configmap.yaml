@@ -20,6 +20,34 @@ metadata:
 data:
   TZ: "Asia/Seoul"
 
+  # ══════════════════════════════════════════════════════════════════════
+  # ── ★비밀 보관소(Secrets Manager) 연동 — 2026-08-10 신설
+  # ══════════════════════════════════════════════════════════════════════
+  # 앱이 기동할 때 금고에서 비밀값을 읽어 환경변수로 넣는다(`app/secrets_loader.py`).
+  # ★열쇠 두 개(SECRETS_ACCESS_KEY·SECRETS_SECRET_KEY)만 behavior-ai-secret 에
+  #   있고 나머지 비밀값은 전부 금고에 있다. 백엔드가 0807 에 간 길과 같다.
+  #
+  # 왜 — K8s Secret 은 이름과 달리 암호화가 아니라 ★base64 다. etcd 에 사실상
+  #      평문으로 들어가고 `kubectl get secret` 만 되면 다 읽힌다.
+  #      금고는 KMS(kms11)로 암호화되고 누가 언제 읽었는지 기록이 남는다.
+  #
+  # ⚠️★여기 이름을 더하기 ★전에 금고에 시크릿이 있어야 한다 —
+  #   없는 이름을 적으면 로더가 예외를 던져 ★파드가 기동에 실패한다.
+  SECRETS_BACKEND: "kakaocloud"
+  # 시크릿 4건 → 환경변수 6개. 2026-08-10 에 ★실제로 읽어 K8s 값과 대조했다
+  # (값은 안 찍고 sha256 앞 10자로 — 5개 전부 일치).
+  #   catchap-behavior-ai-db-account    MYSQL_USER · MYSQL_PASSWORD
+  #   catchap-behavior-ai-collect-key   COLLECT_API_KEY
+  #   catchap-behavior-ai-admin-key     ADMIN_API_KEY
+  #   catchap-service-bridge-key        CAPTCHA_BACKEND_API_KEY
+  #     ★마지막 것은 ★캡차와 공유한다 — 캡차의 BEHAVIOR_AI_BACKEND_KEY 와
+  #       행동AI 의 CAPTCHA_BACKEND_API_KEY 는 ★같은 값이다(sha256 로 확인).
+  #       한쪽만 바꾸면 수집이 401 로 조용히 끊기므로 ★한 시크릿에 묶었다.
+  SECRETS_NAMES: "catchap-behavior-ai-db-account,catchap-behavior-ai-collect-key,catchap-behavior-ai-admin-key,catchap-service-bridge-key"
+  # ★엔드포인트는 코드 기본값과 같지만, 어디에 붙는지 보이는 게 낫다.
+  SECRETS_IAM_ENDPOINT: "https://iam.kakaocloud.com/identity/v3"
+  SECRETS_ENDPOINT: "https://secrets-manager-service.kr-central-2.kakaocloud.com"
+
   # ── 데이터베이스 (관리형 MySQL)
   # ★캡차와 같은 인스턴스, 다른 데이터베이스다. 이름 규칙도 캡차와 맞춘다.
   # ★★0805 — IP(10.0.2.193) 에서 콘솔이 정본으로 주는 DNS 이름으로 바꿨다.
@@ -28,7 +56,8 @@ data:
   MYSQL_HOST: "az-b.mysql-team1.5f428f1b341249c983ab19c6f8f3fdb4.mysql.managed-service.kr-central-2.kakaocloud.com"
   MYSQL_PORT: "3306"
   MYSQL_DATABASE: "catchap_ai"
-  MYSQL_USER: "catchap_ai_app"
+  # ★MYSQL_USER 는 여기 두지 않는다 → 금고 `catchap-behavior-ai-db-account` 에 있다.
+  #   비밀이라서가 아니라 ★비밀번호와 ★같이 회전하기 때문이다.
   MYSQL_POOL_SIZE: "5"
 
   # ── 모델

@@ -1,22 +1,43 @@
 # ★★이 파일은 예시다. 실제 값을 여기에 적지 않는다. git 에도 올리지 않는다.
 #
-# 실제 시크릿은 명령으로 만든다. 값을 파일에 남기지 않는 방법이다.
+# ★★2026-08-10 — 비밀값을 ★금고(Secrets Manager)로 옮겼다.
+#   여기 남는 것은 ★부트스트랩 열쇠 두 줄뿐이다. 나머지 8개는 앱이 기동할 때
+#   금고에서 직접 읽는다(`catchap-captcha/app/secrets_loader.py`).
+#
+#   왜 — K8s Secret 은 이름과 달리 암호화가 아니라 ★base64 다. etcd 에 사실상
+#        평문으로 들어가고 `kubectl get secret` 만 되면 다 읽힌다.
+#        금고는 KMS(kms11)로 암호화되고 누가 언제 읽었는지 기록이 남는다.
 #
 #   kubectl -n catchap create secret generic captcha-secret \
-#     --from-literal=DB_PASSWORD='…' \
-#     --from-literal=APP_SECRET='…' \
-#     --from-literal=CAPTCHA_SITE_KEY='…' \
-#     --from-literal=CAPTCHA_SITE_SECRET='…' \
-#     --from-literal=CAPTCHA_ADMIN_KEY='…' \
-#     --from-literal=BEHAVIOR_AI_BACKEND_KEY='…'
+#     --from-literal=SECRETS_ACCESS_KEY='…' \
+#     --from-literal=SECRETS_SECRET_KEY='…'
 #
-# ★값의 출처
-#   DB_PASSWORD              catchap_captcha_app — 인프라-캡처-비공개/자격증명.txt
-#   나머지 5개               옛 GPU 서버에서 돌던 프로세스의 환경변수
-#                            ⚠️컷오버 때 회전을 권한다. 옛 서버에 평문으로 남아 있다.
+# ★값의 출처 — 서비스 계정 `catchap-captcha` 의 IAM 액세스 키
+#   (인프라-캡처-비공개/자격증명.txt 1-8 절 · 2026-08-10 신설)
+#   그 계정은 `Secrets Manager 매니저` + `KMS 사용자` + `Object Storage 매니저` 이고
+#   ★kms11 접근 명단에 들어 있다(실제로 복호화되는 것을 확인했다).
 #
-# ★나중에 — Secrets Manager 에서 직접 읽어 오게 바꾼다(백엔드에 그 코드가 이미 있다).
-#   지금은 클러스터 권한이 없어 그 연동을 못 얹으므로 kubectl 시크릿으로 시작한다.
+# ⚠️★이 계정을 재생성하지 말 것 — 역할은 만든 뒤에 못 바꾸고, 새 계정은
+#   kms11 명단에 없어서 캡차가 기동하지 못한다.
+#
+# ⚠️★이 두 줄이 「열쇠들의 열쇠」다. 이것만 있으면 금고의 캡차 시크릿을 전부 읽는다.
+#   완전한 해결은 없다(어딘가에 첫 열쇠는 있어야 한다). 대신 이렇게 줄인다 —
+#     · 이 하나만 IAM 에서 즉시 폐기할 수 있다
+#     · 읽은 기록이 남는다
+#     · 카카오클라우드로 나가는 네트워크가 있어야만 쓸 수 있다
+#
+# ── 금고로 옮긴 8개 (2026-08-10 · 값은 옛것 그대로 · ★회전이 아니라 이사)
+#   APP_SECRET               → catchap-captcha-app-secret
+#   DB_USER · DB_PASSWORD    → catchap-captcha-db-account
+#   CAPTCHA_ADMIN_KEY        → catchap-captcha-admin-key
+#   ASSET_S3_ACCESS_KEY      → catchap-captcha-asset-s3-keys
+#   ASSET_S3_SECRET_KEY      ┘
+#   BEHAVIOR_AI_BACKEND_KEY  → catchap-service-bridge-key   ★행동AI 와 공유
+#   CAPTCHA_SITE_KEY         → catchap-main-captcha-site-secret  ★백엔드와 공유
+#   CAPTCHA_SITE_SECRET      ┘
+#
+#   ★묶는 기준은 「같이 회전하는가」다. 앱별로 묶으면 공유 값이 두 곳에 생겨
+#     한쪽만 바꿨을 때 조용히 깨진다.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -24,9 +45,5 @@ metadata:
   namespace: catchap
 type: Opaque
 stringData:
-  DB_PASSWORD: "여기에-넣지-말-것"
-  APP_SECRET: "여기에-넣지-말-것"
-  CAPTCHA_SITE_KEY: "여기에-넣지-말-것"
-  CAPTCHA_SITE_SECRET: "여기에-넣지-말-것"
-  CAPTCHA_ADMIN_KEY: "여기에-넣지-말-것"
-  BEHAVIOR_AI_BACKEND_KEY: "여기에-넣지-말-것"
+  SECRETS_ACCESS_KEY: "여기에-넣지-말-것"
+  SECRETS_SECRET_KEY: "여기에-넣지-말-것"
