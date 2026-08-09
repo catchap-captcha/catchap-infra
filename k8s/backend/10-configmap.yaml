@@ -129,10 +129,12 @@ data:
   # ── 메일
   SMTP_HOST: "smtp.gmail.com"
   SMTP_PORT: "587"
-  # ★SMTP_USER 는 비밀이 아니라 **로그인 계정(메일 주소)** 이다. 비밀번호는 금고에서 온다.
+  # ★SMTP_USER 는 비밀이 아니라 **로그인 계정(메일 주소)** 이다.
   #   ⚠️이 값이 비면 ENV=prod 에서 **부팅이 거부된다**(0805 실측). 메일이 "보낸 척"
   #     되는 걸 막으려는 설계라, 빈 채로 띄우는 우회는 하지 않는다.
-  SMTP_USER: "09.daviya.09@daviya.kr"
+  # ★2026-08-10 — 여기서 빼고 금고 `catchap-smtp-app-password` 에 넣었다.
+  #   비밀이라서가 아니라 ★비밀번호와 같이 회전하기 때문이다. 나눠 두면
+  #   계정을 바꿀 때 한쪽만 고쳐 놓고 "메일이 안 갑니다"를 보게 된다.
   # ★화면에 보이는 발신자. 로그인 계정과 달라도 된다(별칭 send-as).
   MAIL_FROM: "catchap5@catchap5.com"
   MAIL_FROM_NAME: "CatChap"
@@ -158,9 +160,9 @@ data:
   PAYMENT_SUCCESS_URL: "https://www.catchap5.com/payment/success"
   PAYMENT_FAIL_URL: "https://www.catchap5.com/payment/fail"
   PAYMENT_CANCEL_URL: "https://www.catchap5.com/payment/cancel"
-  # ★포트원 상점 식별자. 공개 값이라 여기 둔다(비밀은 catchap-portone-keys).
-  #   프로덕션에 있는데 여기 빠져 있었다 — 없으면 결제 승인이 안 된다.
-  PORTONE_STORE_ID: "store-af63494b-0374-429b-a9c2-8e6aa3be949c"
+  # ★포트원 상점 식별자. 공개 값이지만 ★2026-08-10 에 금고 `catchap-portone-keys` 로
+  #   옮겼다 — 비밀이라서가 아니라 ★API 키와 같이 회전하기 때문이다.
+  #   (프로덕션에 있는데 여기 빠져 있어 0807 에 넣었던 값이다. 없으면 결제 승인이 안 된다.)
 
   # ── 업로드 상한
   # ⚠️★여기 있던 값은 ★코드 기본값이었고 프로덕션과 달랐다(0807 전수 대조에서 찾음).

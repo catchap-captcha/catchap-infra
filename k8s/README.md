@@ -73,18 +73,33 @@ docker run --rm --entrypoint grep <이미지> -oE '^    [A-Z][A-Z0-9_]*:' /app/a
 ⬜ ★컷오버                 남은 전부. 가비아 레코드 3~4줄
 ```
 
-⚠️★★**비밀값 방식이 하루 안에 두 번 바뀌었습니다. 지금 상태를 정확히 적습니다.**
+✅★★**2026-08-10 — 세 앱 전부 금고에서 직접 읽습니다. K8s 에는 열쇠만 남습니다.**
 
 ```
-아침    금고에서 앱이 직접 읽는 방식으로 정리 (K8s 에는 열쇠 2줄만)
-저녁    ★팀이 오늘 구운 새 이미지에 그 코드(secrets_loader.py)가 ★없었습니다
-        → 비밀값 10개를 다시 backend-secret 에 넣었습니다
-        → ConfigMap 의 SECRETS_* 는 ★지금 이미지에서 무시됩니다 (지우지 않고 남겨 둠)
-
-⬜되돌리는 길   catchap-backend / feat/media-object-storage 브랜치에 ★그 코드가 있습니다
-                (2026-08-03 "feat(secrets): 기동 시 Secrets Manager에…")
-                jy(→main) 에 병합하면 금고 방식으로 되돌아갑니다
+backend-secret      2개   SECRETS_ACCESS_KEY · SECRETS_SECRET_KEY   (0807)
+captcha-secret      2개   같음                                       (0810)
+behavior-ai-secret  2개   같음                                       (0810)
+catchap-registry    1개   .dockerconfigjson  ★이것만 못 옮깁니다 —
+                          쿠버네티스가 파드를 띄우기 ★전에 필요한 값이라
+                          앱이 읽어 올 수 없습니다
+── 클러스터 비밀값 총 ★7개 (전에는 15개)
 ```
+
+★**값을 바꿀 때는 금고에서 새 버전을 만들고 `kubectl rollout restart` 만 하면 됩니다.**
+코드도 git 도 안 고칩니다. 로더가 `default_version` 을 따라갑니다.
+
+<details>
+<summary>⚠️(지난 이야기 — 0805 에 두 번 바뀌었습니다. ★따르지 마십시오)</summary>
+
+```
+0805 아침    금고에서 앱이 직접 읽는 방식으로 정리
+0805 저녁    ★팀이 그날 구운 새 이미지에 그 코드가 ★없어서
+             비밀값 10개를 다시 backend-secret 에 넣었습니다
+0807         코드를 병합해 백엔드가 금고로 돌아갔습니다
+0810         캡차·행동AI 도 같은 길로 왔습니다  ← ★지금
+```
+
+</details>
 
 ★**스키마 검증(`kubectl apply --dry-run=server`)을 0804·0805 에 실제로 했습니다.**
 
