@@ -177,12 +177,15 @@ readiness  △ DB 끊김을 못 잡는다.
 ## ⬜ 남은 것
 
 ```
-⬜ API 열쇠 3개의 값        옛 서버 환경변수 읽기가 안전장치에 막혔다.
-                          → 캡차 쪽과 짝이 맞아야 하므로 ★컷오버 때 양쪽을 같이
-                            새로 만드는 것을 권한다
-⬜ MYSQL_PASSWORD          자격증명.txt 2-3 (`catchap_ai_app`)
-⬜ catchap_ai 데이터베이스   옛 DB 에서 옮겼는지 확인 필요
+✅ API 열쇠 3개의 값        0810 — ★금고로 옮겼습니다. K8s 에는 없습니다
+                          ★CAPTCHA_BACKEND_API_KEY 는 캡차의 BEHAVIOR_AI_BACKEND_KEY 와
+                            ★같은 시크릿(catchap-service-bridge-key)에 두 이름으로 있습니다.
+                            따로 두면 한쪽만 회전했을 때 수집이 401 로 조용히 끊깁니다
+✅ MYSQL_PASSWORD          0810 — 금고 catchap-behavior-ai-db-account
+                          ★MYSQL_USER 도 같이 넣었습니다(같이 회전하므로)
+✅ catchap_ai 데이터베이스   0809 컷오버 때 다시 옮겼습니다 (행 1,102)
 ⬜ 소스 확보               커밋 해시로 다시 굽기 위해. sw님께 문의
-⬜ Secrets Manager 연동     백엔드에는 있고(`app/core/secrets_loader.py`) 여기에는 없다.
-                          코드를 고쳐야 해서 이번 이전에서는 K8s Secret 으로 간다
+✅ Secrets Manager 연동     ★0810 — 넣었습니다 (catchap-behavior-ai #5)
+                          `app/secrets_loader.py` — 백엔드 것을 그대로 옮긴 코드입니다
+                          기동 로그의 [SECRETS] 줄에서 무엇을 어디서 받았는지 보입니다
 ```
