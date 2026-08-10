@@ -56,7 +56,11 @@ jobs:
           #   신원만 보면, 사람이 user.email 을 봇 주소로 맞추고 아무 코드나
           #   밀어 넣어도 통과한다. 그래서 ★한 겹 더 본다.
           #
-          #     ① 바꾼 파일이 `k8s/<앱>/30-deployment.yaml` ★뿐인가
+          #     ① 바꾼 파일이 아래 ★둘뿐인가
+          #          k8s/<앱>/30-deployment.yaml   (앱 이미지)
+          #          k8s/<앱>/20-migrate-job.yaml  (마이그레이션 Job 이미지)
+          #        ★2026-08-10 — 마이그레이션 Job 이 생기면서 봇이 ★두 파일을 고치게
+          #          됐다. 하나만 허용해 두었더니 봇 배포가 ★빨간불이 됐다(실제로 겪음).
           #     ② 바뀐 줄이 `image:` ★뿐인가
           #
           #   둘 다 맞아야 넘긴다. 통과하려면 ★배포 봇이 하는 일과 똑같이 해야 한다.
@@ -72,7 +76,7 @@ jobs:
               echo "::warning::커밋 내용 조회에 실패했습니다. 판정하지 않고 넘어갑니다."
               exit 0        # ★측정 실패를 위반으로 읽지 않는다
             fi
-            BAD=$(printf '%s\n' "$FILES" | grep -vE '^k8s/[^/]+/30-deployment[.]yaml$' || true)
+            BAD=$(printf '%s\n' "$FILES" | grep -vE '^k8s/[^/]+/(30-deployment|20-migrate-job)[.]yaml$' || true)
             LINES=$(gh api "repos/$REPO/commits/$SHA" --jq '.files[].patch' | grep -E '^[+-][^+-]' || true)
             NONIMAGE=$(printf '%s\n' "$LINES" | grep -vE '^[+-][[:space:]]*image:[[:space:]]' || true)
             if [ -z "$BAD" ] && [ -z "$NONIMAGE" ]; then
