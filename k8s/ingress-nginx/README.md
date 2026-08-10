@@ -14,7 +14,12 @@
 설치 방식   ★Helm 아님 — 정적 매니페스트를 kubectl apply
             (helm list -n ingress-nginx 가 ★비어 있음)
 판본        app.kubernetes.io/version: ★1.14.5
-서비스      LoadBalancer → 카카오클라우드 LB 2-a / 2-b 로 연결
+컨트롤러    ★DaemonSet (노드마다 한 벌 · Deployment 아님)
+            ★hostNetwork: true → 파드 IP = ★노드 IP
+서비스      ★ClusterIP (0810 실측)
+            ⚠️전에 이 문서에 「LoadBalancer」로 적혀 있었는데 ★틀렸습니다.
+            바깥 노출은 Service 가 아니라 ★카카오클라우드 LB 가 노드 4대의
+            80·443 을 직접 가리켜서 합니다.
 ```
 
 ---
@@ -76,9 +81,12 @@ kubectl patch configmap ingress-nginx-controller -n ingress-nginx --type merge \
 ### 적용됐는지 확인
 
 ```bash
-kubectl exec -n ingress-nginx deploy/ingress-nginx-controller -- \
+kubectl exec -n ingress-nginx ds/ingress-nginx-controller -- \
   grep -E "real_ip_recursive|set_real_ip_from|X-Forwarded-For" /etc/nginx/nginx.conf | sort -u
 ```
+
+⚠️★`deploy/` 가 아니라 `ds/` 입니다. 전에 이 문서에 `deploy/` 로 적혀 있었는데
+컨트롤러는 **DaemonSet** 이라 그 명령은 **실패합니다**(0810 정정).
 
 **이렇게 나와야 합니다.**
 
@@ -129,9 +137,29 @@ curl -s -o /dev/null --resolve api.catchap5.com:443:210.109.55.233 \
 ## ⬜아직 안 한 것
 
 ```
-⬜ ingress-nginx 전체를 git 으로 관리하기
-   지금은 ★이 두 키만 적어 뒀습니다. 컨트롤러 본체(Deployment·RBAC·Service)는
-   여전히 git 밖입니다.
-   ⚠️ArgoCD 로 관리하려면 ★기존 설치와 충돌하는지 먼저 시험해야 합니다
-      (버려도 되는 네임스페이스에서 확인할 것 — prune 때 그렇게 했습니다)
+✅ 컨트롤러 본체를 git 에 넣기 (0810 완료)
+   → 20-controller-내려받음.yaml
+   살아 있는 것을 그대로 내려받았습니다. ★원본 매니페스트로는 재현이 안 됩니다
+   (원본은 Deployment·hostNetwork 없음인데 우리는 DaemonSet·hostNetwork).
+   ⚠️웹훅용 TLS 인증서는 ★일부러 뺐습니다 — 설치 때 Job 이 새로 만듭니다.
+
+⬜ ArgoCD 로 관리하기
+   ⚠️기존 설치와 충돌하는지 ★먼저 시험해야 합니다
+   ⚠️★prune 이 켜져 있어 잘못 붙이면 인그레스가 통째로 지워질 수 있습니다.
+      지금은 ★기록용으로만 둡니다.
 ```
+
+---
+
+## ⚠️★hostNetwork 가 다른 작업에 준 영향
+
+0810 에 NetworkPolicy 를 걸다가 여기 걸려 되돌렸습니다.
+
+```
+· 출발지가 파드가 아니라 ★호스트라서 `namespaceSelector` 로
+  「인그레스에서 온 것」을 고를 수 ★없습니다
+· Calico 가 IPIP 터널을 써서, 받는 쪽이 보는 출발지는
+  노드 IP(10.0.2.128)가 아니라 ★터널 주소(192.168.57.1)입니다
+```
+
+자세한 것 = `인프라-캡처/30-작업이력/84-0810-클러스터-내부-방화벽/`
