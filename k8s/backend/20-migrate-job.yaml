@@ -41,16 +41,23 @@ metadata:
     argocd.argoproj.io/hook: PreSync
     # ★설정(11-migrate-config, wave -1)이 만들어진 ★뒤에 돈다
     argocd.argoproj.io/sync-wave: "0"
-    # ★성공하면 지운다. ⚠️실패한 것은 ★남깁니다 — 로그를 봐야 하니까요.
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    # ★★다음 배포 직전까지 ★남깁니다 — 로그를 봐야 하기 때문입니다.
+    #
+    #   처음에는 HookSucceeded(성공하면 삭제)로 뒀는데, 실제로 돌려 보니
+    #   ★성공하자마자 파드가 지워져 「무엇이 올라갔는지」를 못 봤습니다(0810 실측).
+    #   마이그레이션은 나중에 "그때 뭐가 바뀌었지?"를 묻게 되는 일이라,
+    #   ★마지막 한 번의 기록은 남아 있어야 합니다.
+    #
+    #   BeforeHookCreation = 다음 훅을 만들기 ★직전에만 지웁니다.
+    #   → 항상 ★마지막 배포의 Job 과 로그가 남아 있습니다. 쌓이지도 않습니다.
+    #     kubectl -n catchap logs job/backend-migrate
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   # ★한 번만 시도합니다. DDL 은 되돌리기 어려워서, 실패했을 때 자동으로 또
   #   돌리는 것보다 ★사람이 보는 편이 낫습니다.
   backoffLimit: 0
   # ★30분 안에 안 끝나면 실패로 봅니다. 표가 커지면 늘려야 할 수 있습니다.
   activeDeadlineSeconds: 1800
-  # 실패한 Job 을 하루 뒤 정리 (로그를 볼 시간은 줍니다)
-  ttlSecondsAfterFinished: 86400
   template:
     metadata:
       labels:
