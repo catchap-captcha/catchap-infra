@@ -62,3 +62,17 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: behavior-ai
+---
+# ★STT 워커 — 2026-08-10 오후에 2벌이 되면서 추가.
+#   ⚠️GPU 가 총 2장뿐이라 minAvailable: 1 이 특히 중요하다. 노드를 손보다가
+#     두 벌을 한꺼번에 내리면 ★자막 생성이 통째로 멈춘다.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stt-worker
+  namespace: catchap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stt-worker
