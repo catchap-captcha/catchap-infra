@@ -1,0 +1,24 @@
+# STT 워커 설정 — ★비밀이 아닌 값만
+#
+# ⚠️STT_WORKER_TOKEN 은 여기 없습니다. K8s Secret `stt-worker-secret` 에 있습니다.
+#   ★그 값은 금고의 `catchap-stt-worker-token` 과 ★같아야 합니다 —
+#   백엔드가 금고에서 그 값을 읽어 헤더에 실어 보내기 때문입니다.
+#   한쪽만 바꾸면 전사가 ★401 로 조용히 멈춥니다.
+#
+# ★왜 이 워커는 금고 로더를 안 쓰나 (0810 결정)
+#   값이 ★한 개뿐입니다. 로더를 넣으려면 부트스트랩 열쇠가 한 쌍 더 필요한데,
+#   그 열쇠 하나가 금고 19건을 전부 엽니다(0810 확인).
+#   값 하나 때문에 사정거리를 그만큼 넓히는 것은 남는 장사가 아닙니다.
+#   ⬜값이 늘면 그때 다시 봅니다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stt-worker-config
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: stt-worker
+data:
+  # ★옛 GPU VM 컨테이너에 실려 있던 값 그대로입니다 (0810 대조 확인)
+  STT_MODEL: "large-v3"
+  STT_DEVICE: "cuda"
+  STT_COMPUTE: "float16"

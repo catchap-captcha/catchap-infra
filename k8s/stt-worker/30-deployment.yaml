@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stt-worker
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: stt-worker
+spec:
+  # ★1 벌뿐이다 — GPU 가 ★한 장이라 두 벌을 띄울 수 없다.
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stt-worker
+  strategy:
+    # ★★Recreate 여야 한다. RollingUpdate 를 쓰면 ★영원히 Pending 이 된다.
+    #
+    #   RollingUpdate 는 새 파드를 먼저 띄우고 옛 파드를 내린다. 그런데 GPU 는
+    #   ★한 장이고 옛 파드가 그것을 쥐고 있다. 새 파드는 nvidia.com/gpu: 1 을
+    #   달라고 하는데 남은 GPU 가 0 이라 자리를 못 잡는다. 옛 파드는 새 파드가
+    #   Ready 가 되기를 기다리므로 ★서로 기다리다 멈춘다.
+    #
+    #   Recreate 는 옛 파드를 ★먼저 내리고 새 파드를 띄운다.
+    #   ⚠️그래서 배포하는 동안 전사가 ★잠깐 끊긴다. 강의 업로드가 없는 시간에
+    #     배포하면 티가 안 난다. 자막이 필요한 순간에만 부르는 서비스라 감수한다.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stt-worker
+    spec:
+      # ★저장소가 비공개다. 이게 없으면 ImagePullBackOff 로 멈춘다.
+      imagePullSecrets:
+        - name: catchap-registry
+      # ★★nodeSelector 를 안 쓴다 — nvidia.com/gpu 를 달라고 하는 것으로 충분하다.
+      #   그 자원을 가진 노드는 GPU 노드 하나뿐이라 스케줄러가 알아서 보낸다.
+      #   노드 이름이나 노드풀 이름을 적으면 그것이 바뀔 때 같이 고쳐야 한다.
+      #
+      # ★안티어피니티도 없다 — 한 벌뿐이라 나눌 것이 없다.
+      containers:
+        - name: stt-worker
+          # ⬜태그는 CI 가 커밋 해시로 고친다 (catchap-stt-worker 저장소의 deploy.yml)
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-stt-worker:PLACEHOLDER
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8100
+          envFrom:
+            - configMapRef:
+                name: stt-worker-config
+            - secretRef:
+                name: stt-worker-secret
+          # ★★GPU 를 달라고 하는 줄이 ★이것 하나다.
+          #   limits 에만 적는다 — 확장 자원은 requests 를 안 적으면 같은 값이 들어간다.
+          #   ⚠️GPU 는 ★쪼갤 수 없다. 0.5 같은 값은 못 쓴다.
+          #
+          # ★cpu·memory 는 옛 GPU VM 에서 ★실측한 값이다 (0810, docker stats)
+          #     MEM  481.1MiB (모델이 GPU 에 올라간 상태)   CPU 0.21% (대기 중)
+          #     uvicorn RSS 509MB · GPU 메모리는 ★3892MiB / 15360MiB
+          #   호스트 메모리를 적게 쓰는 이유는 모델이 ★GPU 에 올라가 있어서다.
+          #   전사할 때 오디오 디코딩으로 잠깐 더 쓰므로 한도는 넉넉히 4Gi 로 둔다.
+          #   ⚠️cpu 한도는 ★일부러 안 건다 — 한도를 걸면 전사 중에 조여져 느려진다.
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+              nvidia.com/gpu: 1
+            limits:
+              memory: "4Gi"
+              nvidia.com/gpu: 1
+          # ★/health 는 모델을 올리지 않는다(main.py 확인). 그래서 가볍고 빠르다.
+          #   ⚠️모델은 ★첫 전사 요청 때 올라온다(lazy). 그래서 startupProbe 가 짧아도 된다 —
+          #     기동 자체는 금방이고, 오래 걸리는 것은 첫 전사다.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24   # 최대 2분
+          securityContext:
+            allowPrivilegeEscalation: false
+            # ★루트 파일시스템을 잠근다. 쓰는 곳은 아래 두 군데뿐이다.
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            # ⚠️★root 로 돈다 — 이미지에 USER 지시가 없고, 모델 캐시 기본 경로가
+            #   /root/.cache/huggingface 다. 비root 로 바꾸려면 이미지도 같이 고쳐야 해서
+            #   이번 이전에서는 옛 VM 과 ★같은 조건을 유지했다.
+            #   ⬜다음에 이미지를 손볼 때 비root + HF_HOME 으로 옮긴다.
+          volumeMounts:
+            # ★모델 캐시 — 이게 없으면 파드가 뜰 때마다 2.9GB 를 다시 받는다
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            # ★업로드된 오디오를 잠깐 받아 두는 곳 (main.py 가 tempfile 을 쓴다)
+            #   ⚠️백엔드가 영상이 아니라 ★오디오만 뽑아 보낸다(0806 수정, 11.66GB→89.1MB).
+            #     그래도 여유를 두고 4Gi 로 잡는다.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: stt-model-cache
+        - name: tmp
+          emptyDir:
+            sizeLimit: 4Gi
