@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: catchap-stt-worker
+  namespace: argocd
+  finalizers:
+    # ★앱을 지울 때 만들어 둔 것도 같이 지웁니다.
+    # ⚠️여기에는 ★PVC(stt-model-cache)가 딸려 있습니다. 앱을 지우면 모델 캐시 2.9GB 도
+    #   같이 사라지고, 다시 만들 때 HuggingFace 에서 다시 받습니다(서비스가 죽지는 않습니다).
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:catchap-captcha/catchap-infra.git
+    targetRevision: main
+    path: k8s/stt-worker
+    directory:
+      exclude: '{*.예시.yaml,*.yaml.예시}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: catchap
+  syncPolicy:
+    automated:
+      prune: true
+      # ⚠️selfHeal 은 다른 앱과 같이 끕니다 — 급할 때 손으로 막는 길을 남깁니다.
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    # 이미지 태그는 CI 가 매니페스트를 고쳐서 바꿉니다.
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
