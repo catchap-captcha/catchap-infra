@@ -27,8 +27,12 @@ metadata:
   labels:
     app.kubernetes.io/name: stt-worker
 data:
-  # ★옛 GPU VM 컨테이너에 실려 있던 값 그대로입니다 (0810 대조 확인)
-  STT_MODEL: "large-v3"
+  # ★★모델을 ★이름이 아니라 ★경로로 줍니다 (0810 오후 바꿈)
+  #   이미지에 구워 둔 곳입니다. faster-whisper 는 로컬 경로를 받으면
+  #   HuggingFace 를 ★아예 안 부릅니다. 이름(`large-v3`)으로 두면 캐시를 찾으러 나갑니다.
+  #   ⚠️전에는 PVC 에 캐시로 뒀는데 그 디스크가 ★가용영역에 묶여서,
+  #     GPU 노드풀을 다른 AZ 에 다시 만들면 파드가 ★영영 Pending 이 됐습니다.
+  STT_MODEL: "/opt/whisper-model"
   STT_DEVICE: "cuda"
   STT_COMPUTE: "float16"
 
