@@ -74,7 +74,7 @@ spec:
           #   → 비밀값 10개는 계속 backend-secret 에 있습니다.
           #   → ConfigMap 의 SECRETS_* 는 이 이미지에서 **무시됩니다.**
           #   ⬜jy님께 로더 병합을 요청할 것. 병합되면 Secret 을 열쇠 2줄로 되돌립니다.
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-backend-repo/catchap-backend:65315c9
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-backend-repo/catchap-backend:2b49700
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
