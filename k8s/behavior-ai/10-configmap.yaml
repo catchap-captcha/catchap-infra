@@ -71,17 +71,34 @@ data:
 
   # ── 모델
   # ★★코드 기본값은 `models/production` 인데 **이미지에 그 폴더가 없다.**
-  #   이미지 안에 있는 모델 번들은 아래 하나뿐이다.
-  #
-  #     /app/models/candidate/revalidation_two_view_participant_safe_20260722/
-  #         two_view_fusion.joblib   (1.2MB)
-  #
   #   기본값으로 두면 모델이 **말없이 안 뜬다**(앱은 그래도 200 을 준다).
-  #   프로덕션 /health 가 아래를 돌려준 것으로 이 경로가 맞다는 걸 확인했다.
+  #   그래서 여기서 번들 경로를 못 박는다.
   #
+  # ★★0811 — 번들을 바꿨다 (sw님 요청 · catchap-behavior-ai #9·#10)
+  #
+  #   이미지 안에 번들이 ★두 벌 있다(0811 파드 안에서 직접 확인).
+  #     /app/models/candidate/revalidation_two_view_participant_safe_20260722/   ← 옛것
+  #     /app/models/candidate/surface_aware_veto_20260810/                       ← ★지금 것
+  #
+  #   ★왜 바꾸나 — 옛 번들의 임계값은 07-22 데이터에서 뽑은 것이라 지금 캡차 화면의
+  #     동작점이 아니다. 캡차를 ★정상 통과한 사람의 40.9% 가 의심으로 기록되고 있었다
+  #     (sw님이 DB 로 확인 · 같은 궤적 200건 재채점 44.0% 로 채점 경로 일치도 확인).
+  #     새 번들은 같은 궤적에서 8.5% 다.
+  #
+  #   ⚠️★이것은 「승격」이 아니다. 8.5% 도 기준(배포 1%·실험 3%)에는 미달이다.
+  #     ★그림자 모드 안에서 더 나은 번들로 바꾸는 것뿐이다(sw님이 먼저 밝힌 사실).
+  #     RISK_POLICY_MODE 가 shadow 라 ★사용자에게 영향이 없다.
+  #
+  #   ★되돌리는 법 — 이미지를 다시 굽지 않아도 된다. 이 한 줄을 옛 경로로 되돌리고
+  #     `kubectl -n catchap rollout restart deploy/behavior-ai` 하면 끝이다.
+  #     두 번들이 같은 이미지 안에 있어서 가능하다.
+  #
+  #   ⚠️ConfigMap 만 바꾸면 파드가 ★스스로 다시 읽지 않는다. rollout restart 가 필요하다.
+  #
+  #   바꾼 뒤 /health 가 아래를 돌려주면 적용된 것이다.
   #     model_loaded: true
-  #     model_version: "revalidation_two_view_participant_safe_20260722"
-  PRODUCTION_MODEL_DIR: "models/candidate/revalidation_two_view_participant_safe_20260722"
+  #     model_version: "surface_aware_veto_20260810"
+  PRODUCTION_MODEL_DIR: "models/candidate/surface_aware_veto_20260810"
 
   # ── 위험도 판정 방식
   # ★★shadow = "AI 가 이렇게 판단했을 것이다"를 기록만 하고 **실제 캡차 결과를 안 바꾼다.**
