@@ -47,7 +47,7 @@ spec:
       containers:
         - name: stt-worker
           # ⬜태그는 CI 가 커밋 해시로 고친다 (catchap-stt-worker 저장소의 deploy.yml)
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-stt-worker:1427147
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-stt-worker:8165a75
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
