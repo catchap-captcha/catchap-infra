@@ -95,10 +95,35 @@ data:
   #
   #   ⚠️ConfigMap 만 바꾸면 파드가 ★스스로 다시 읽지 않는다. rollout restart 가 필요하다.
   #
-  #   바꾼 뒤 /health 가 아래를 돌려주면 적용된 것이다.
+  # ══════════════════════════════════════════════════════════════════════
+  # 🚨★0811 — 새 번들로 바꿨다가 ★되돌렸다. 앱이 그 번들을 못 읽는다.
+  # ══════════════════════════════════════════════════════════════════════
+  #
+  #   바꾸고 재시작했더니 /health 가 이렇게 나왔다.
+  #     model_loaded: ★false
+  #     model_version: ★null
+  #
+  #   ★원인 — 번들 안에 `DensityVeto` 라는 ★클래스 객체가 절여져(pickle) 있는데
+  #     앱에 그 클래스가 ★없다. joblib 이 풀 때 이렇게 죽는다.
+  #
+  #       AttributeError: Can't get attribute 'DensityVeto' on <module '__main__'>
+  #
+  #   대조군 — 옛 번들은 같은 자리에서 ★정상으로 읽힌다(dict).
+  #
+  #   ⚠️★★그런데 앱이 이 오류를 ★조용히 삼킨다. 기동 로그에 한 줄도 안 남고
+  #     파드는 Running·/health 는 200 이다. ★모델 없이 도는 상태가 겉으로는 정상이다.
+  #     (ModelService.load() 가 실패하면 _bundle=None 으로 두고 끝난다)
+  #
+  #   ★모델을 만든 쪽에서 `DensityVeto` 를 ★앱이 import 할 수 있는 모듈에 두고
+  #     번들을 다시 저장해야 한다. 설정만으로는 못 고친다.
+  #
+  #   ★되돌리기는 이 한 줄이면 됐다 — 두 번들이 같은 이미지 안에 있어서
+  #     이미지를 다시 굽지 않고 경로만 옛것으로 돌리고 rollout restart 했다.
+  #
+  #   지금 /health
   #     model_loaded: true
-  #     model_version: "surface_aware_veto_20260810"
-  PRODUCTION_MODEL_DIR: "models/candidate/surface_aware_veto_20260810"
+  #     model_version: "revalidation_two_view_participant_safe_20260722"
+  PRODUCTION_MODEL_DIR: "models/candidate/revalidation_two_view_participant_safe_20260722"
 
   # ── 위험도 판정 방식
   # ★★shadow = "AI 가 이렇게 판단했을 것이다"를 기록만 하고 **실제 캡차 결과를 안 바꾼다.**
