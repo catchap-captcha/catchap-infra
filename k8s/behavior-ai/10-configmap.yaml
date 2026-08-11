@@ -120,10 +120,38 @@ data:
   #   ★되돌리기는 이 한 줄이면 됐다 — 두 번들이 같은 이미지 안에 있어서
   #     이미지를 다시 굽지 않고 경로만 옛것으로 돌리고 rollout restart 했다.
   #
-  #   지금 /health
-  #     model_loaded: true
-  #     model_version: "revalidation_two_view_participant_safe_20260722"
-  PRODUCTION_MODEL_DIR: "models/candidate/revalidation_two_view_participant_safe_20260722"
+  # ══════════════════════════════════════════════════════════════════════
+  # ✅0811 두 번째 시도 — 고쳐진 번들로 다시 바꾼다 (sw님 PR #11)
+  # ══════════════════════════════════════════════════════════════════════
+  #
+  #   ★sw님이 고친 것
+  #     · DensityVeto 를 app/services/density_veto.py 로 옮김
+  #       → 번들이 app.services.density_veto.DensityVeto 로 기록돼 앱이 찾는다
+  #     · app/main.py 가 except Exception: pass 로 삼키던 것을 고쳐,
+  #       모델이 안 실리면 [MODEL] 줄을 stderr 로 남긴다
+  #     · 배포 대상 번들에 __main__ 문자열이 있으면 CI 가 실패하게 함
+  #
+  #   ★★바꾸기 전에 ★실제로 열어 봤다 (sw님이 요청하셨다 · 0811)
+  #
+  #     새 번들에는 sklearn 객체(StandardScaler 등)가 들어 있다. sklearn pickle 은
+  #     판본에 민감한데 requirements 가 범위 지정(>=1.5,<2.0)이고, 이미지가 실제로
+  #     어느 판본을 깔았는지는 pip 층이 캐시돼 빌드 로그에 안 남아 있었다.
+  #
+  #       이미지의 sklearn   ★1.9.0        (sw님 학습 환경과 ★같다)
+  #       옛 번들(대조군)     열림 · 검사통과 · 판본 경고 ★없음
+  #       ★새 번들           열림 · 검사통과 · 판본 경고 ★없음
+  #       운영 경로 load()   ★True · model_version=surface_aware_veto_20260810
+  #
+  #     ★`sys.modules` 손질 없이 깨끗한 프로세스에서 쟀다.
+  #       (sw님 로컬 검증에는 그 손질이 들어가 있어 첫 시도의 문제를 못 잡았다고
+  #        먼저 밝히셨다. 그래서 이번엔 ★운영 이미지 안에서 확인했다.)
+  #
+  #   ⚠️「승격」이 아니다. 8.5% 도 기준(배포 1%·실험 3%)에는 미달이고
+  #     RISK_POLICY_MODE 가 shadow 라 사용자에게 영향이 없다.
+  #
+  #   ★되돌리기 — 이미지를 다시 굽지 않는다. 이 한 줄을 옛 경로로 되돌리고
+  #     `kubectl -n catchap rollout restart deploy/behavior-ai` 하면 끝이다.
+  PRODUCTION_MODEL_DIR: "models/candidate/surface_aware_veto_20260810"
 
   # ── 위험도 판정 방식
   # ★★shadow = "AI 가 이렇게 판단했을 것이다"를 기록만 하고 **실제 캡차 결과를 안 바꾼다.**
