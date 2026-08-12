@@ -84,6 +84,31 @@ data:
   BEHAVIOR_AI_URL: "http://behavior-ai.catchap.svc.cluster.local:8010"
   BEHAVIOR_EVENT_TRANSPORT: "shadow"
 
+  # ══════════════════════════════════════════════════════════════════════
+  # 🚨0812 — 행동 AI 의 판단을 실제로 따른다 (sw님)
+  # ══════════════════════════════════════════════════════════════════════
+  #
+  #   지금까지는 이 이름이 여기 없어서 코드 기본값 "shadow" 로 돌았다. 즉 AI 가
+  #   무엇을 권하든 캡차 결과는 안 바뀌었다.
+  #
+  #   ★양쪽이 다 active 여야 실제로 막는다(behavior-ai 의 RISK_POLICY_MODE).
+  #     한쪽만 active 면 아무 일도 안 일어난다 — AI 가 혼자 사용자를 막지 못하게
+  #     한 설계다(`behavior_client.resolve_final_verdict`).
+  #
+  #   ★막는다 = "차단"이 아니라 "캡차를 한 번 더". 게다가 로그인 5회 실패로 이미
+  #     캡차가 뜬 사람에게만 적용된다.
+  #
+  #   ⚠️★승격 기준을 통과해서 켜는 게 아니다. 처음 보는 짧은 궤적 공격은 41.3% 가
+  #     통과하고(기준 10%), 특정 스타일의 사용자는 7번에 1번 캡차를 한 번 더 본다
+  #     (기준 3%). 사람 표본이 10명뿐이라 모델로는 못 넘는 벽이다. 숫자와 근거는
+  #     catchap-behavior-ai 의 docs/AIM_CLASSIFIER_DECISION_20260812.md 에 있다.
+  #
+  #   ⚠️★catchap-captcha#29 가 먼저 배포돼 있어야 한다. 그 전에는 두 서버의 정책이
+  #     어긋난 30초 동안 /health/ready 가 실패로 떨어져 파드 2벌이 전부 빠진다.
+  #
+  #   ★되돌리기 — 이 값과 behavior-ai 쪽 값을 shadow 로 되돌리고 rollout restart.
+  BEHAVIOR_POLICY_MODE: "active"
+
   # ── 캡차 정책 (옛 서버 값 그대로)
   CHALLENGE_TTL_SECONDS: "60"
   MAX_ATTEMPTS: "3"
