@@ -75,6 +75,25 @@ spec:
           #   → 저장소를 정리하고 나면 커밋 해시로 바꿉니다.
           image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-behavior-ai:54d6521
           imagePullPolicy: IfNotPresent
+          # ★★배포 중 502 를 없앤다 (2026-08-12 실측으로 넣음).
+          #
+          #   0804 에 "로드밸런서가 준비 안 된 파드로는 안 보내므로 끊기지 않는다" 고
+          #   적어 두었는데, ★재기동 중 90번 두드려 3번 실패했다(502 둘·연결끊김 하나).
+          #
+          #   ★왜 끊기나 — 파드가 Terminating 이 되는 것과 인그레스가 대상 목록에서
+          #     빼는 것은 ★동시가 아니다. 목록에서 빠지기 전에 프로세스가 먼저 멈추면
+          #     그 사이에 온 요청이 갈 곳을 잃는다 → 502.
+          #
+          #   ★sleep 5 는 "잠깐 더 받아 준다" 는 뜻이다. 그동안 인그레스가 목록을
+          #     갱신하고, 그 뒤에 SIGTERM 이 온다. terminationGracePeriod 30초 안이라
+          #     정상 종료할 시간도 남는다.
+          #
+          #   ⚠️maxUnavailable:0 으로는 못 고친다 — 안티어피니티와 노드 2대 때문에
+          #     영원히 Pending 이 된다(0804 실측). 그래서 preStop 으로 푼다.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           ports:
             - name: http
               containerPort: 8010
