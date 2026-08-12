@@ -60,7 +60,7 @@ data:
   #     lectures/eaf12731-…mp4  → media/lectures/eaf12731-…mp4  → ★없음(아직 미이전)
   #   양성·음성 대조가 둘 다 기대대로 나왔다.
   MEDIA_STORAGE_BACKEND: "object"
-  MEDIA_BUCKET: "catchap-storage-prod-team1"
+  MEDIA_BUCKET: "catchap-media-prod-team1"
   MEDIA_S3_ENDPOINT: "https://objectstorage.kr-central-2.kakaocloud.com"
   MEDIA_S3_REGION: "kr-central-2"
   MEDIA_KEY_PREFIX: "media"
