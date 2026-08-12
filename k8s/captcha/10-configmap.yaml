@@ -48,7 +48,7 @@ data:
   #       유효성)를 캐시로 옮기는 설계를 하시는 중이라 ★먼저 값만 준비해 둔다.
   #       아직 코드가 안 쓰므로 SECRETS_REQUIRED_VARS 에는 ★넣지 않는다 —
   #       넣으면 코드가 쓰기 전부터 기동 조건이 되어 버린다.
-SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-captcha-admin-key,catchap-captcha-asset-s3-keys,catchap-service-bridge-key,catchap-main-captcha-site-secret,catchap-valkey-auth"
+  SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-captcha-admin-key,catchap-captcha-asset-s3-keys,catchap-service-bridge-key,catchap-main-captcha-site-secret,catchap-valkey-auth"
   # ★엔드포인트는 코드 기본값과 같지만, 어디에 붙는지 보이는 게 낫다.
   SECRETS_IAM_ENDPOINT: "https://iam.kakaocloud.com/identity/v3"
   SECRETS_ENDPOINT: "https://secrets-manager-service.kr-central-2.kakaocloud.com"
