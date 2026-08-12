@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: valkey-ca
+  namespace: catchap
+  labels:
+    app.kubernetes.io/name: captcha
+# ★이 인증서는 비밀이 아닙니다.
+#   MemStore(Valkey) 서버가 자기 신원을 증명하는 ★공개 인증서입니다.
+#   새어도 잃을 것이 없어서 Secret 이 아니라 ConfigMap 으로 둡니다.
+#
+# 어디서 받았나
+#   콘솔 → MemStore → Valkey → catchap-valkey-prod → 접근 제어
+#        → 전송 암호화(TLS) → [CA 파일]
+#
+# ★확인한 것 (2026-08-12)
+#   받은 파일의 SHA256 = 22399e676881447a682d3d49732c6a1ef43a5c5a28f75813119feb052186874c
+#   0803 에 적어 둔 지문과 ★같습니다.
+#   이 CA 로 검증을 ★켠 채 붙어 TLSv1.3 · AUTH +OK · PING +PONG 을 받았습니다.
+#
+# ⚠️붙일 때 요령 — server_hostname 은 ★엔드포인트가 아니라 인증서 CN 입니다.
+#   서버 인증서에 subjectAltName 이 없어서, 엔드포인트 이름으로 붙으면
+#   Hostname mismatch 로 거부됩니다. CN = service.kakaoenterprise.com
+#
+#   ★서버가 내미는 잎 인증서는 이 CA 와 ★지문이 다릅니다 (CA 가 같은 이름으로
+#     발급하기 때문). 잎 지문을 CA 지문과 비교하면 안 됩니다 — 0812 에 한 번 틀렸습니다.
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIGZzCCBE+gAwIBAgIUINxIhXlZO94daTtJ9Ltq5ym3ZV4wDQYJKoZIhvcNAQEL
+    BQAwgcExCzAJBgNVBAYTAktSMRQwEgYDVQQIDAtHeWVvbmdnaS1kbzEUMBIGA1UE
+    BwwLU2VvbmduYW0tc2kxHzAdBgNVBAoMFktha2FvIEVudGVycHJpc2UgQ29ycC4x
+    FTATBgNVBAsMDERhdGEgTWFuYWdlZDEkMCIGA1UEAwwbc2VydmljZS5rYWthb2Vu
+    dGVycHJpc2UuY29tMSgwJgYJKoZIhvcNAQkBFhlhZG1pbkBrYWthb2VudGVycHJp
+    c2UuY29tMCAXDTI1MDIxODAxNTQ1OFoYDzIxMjUwMTI1MDE1NDU4WjCBwTELMAkG
+    A1UEBhMCS1IxFDASBgNVBAgMC0d5ZW9uZ2dpLWRvMRQwEgYDVQQHDAtTZW9uZ25h
+    bS1zaTEfMB0GA1UECgwWS2FrYW8gRW50ZXJwcmlzZSBDb3JwLjEVMBMGA1UECwwM
+    RGF0YSBNYW5hZ2VkMSQwIgYDVQQDDBtzZXJ2aWNlLmtha2FvZW50ZXJwcmlzZS5j
+    b20xKDAmBgkqhkiG9w0BCQEWGWFkbWluQGtha2FvZW50ZXJwcmlzZS5jb20wggIi
+    MA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQCxzO4cMwUE3xCoEbSz+oY9Ap/I
+    qtvuBHr0AcxZgev+m/VDUazcOw+cMC5/81otCuYr/8It1VedjJKjJFWOPvSV0lm5
+    h1/IsNhI4UUPXstDF0OtLeXZ+5rbxsy+Ffe+NW+JkF+ZWg9BKuKYc4pTGTKZGQm8
+    7dKpG9+xGMKdJFTg/m34Tsv1TZ7iprFt4wk9MpnB+jWayGAH7Iy+iUJwXkvQdzyi
+    kL3RPkN9BHEgN5SFVWPq5n1JiD4mGDoJli0qian+V/230iW946tBkETTJKs9xkA4
+    WfBxEBY8si1f/bNpCylmzX1UsAFaTrhY0uSEa65Eai0VNTTtu+3ne3Pg5csmHSdv
+    vah9XXdzj6RGMTDaUbq8HXA4ePMzTH8QJ0s3/1JoxTq4omcWnJ3AvN82rv3JKU1M
+    N+vEFd98QLt5EA8+eZX76Jq1gHOUdE5V71zuapEHGT8FVaVm0hAAbcfK82kVgS3v
+    DW8zx51rgZVV7am2eH+vKiMa+xuWkYFcMMkjRHfJsVkjMKOcTvf+XCffuSURCKrw
+    idc1FgTQ2hLJtrUHN/YM5cn0/XQW8jNgWi4bdN2dgQwEGmd/9KSGH657b9LJ/FpX
+    8IFd+3aj8fBj1eUA348bVNOpBpzVx4qTKZ+S9n/n84fxMViKYNQxEONi2BSQa98r
+    Dy/pDs1+xgeXrGw7IwIDAQABo1MwUTAdBgNVHQ4EFgQU86IG40KFkCamR3t7aC1y
+    7yASGQ0wHwYDVR0jBBgwFoAU86IG40KFkCamR3t7aC1y7yASGQ0wDwYDVR0TAQH/
+    BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAgEAKaPBx3tznhGM78Usp6SWjKSHcB/2
+    tCiBlr9ooa3cvgNgy7f3QiPM4/PDHzLHSdaLxZh7f0H5npXkUXDgQ1bPD5Z1Dqee
+    3o+1UMjDi6Y0VGRZ4QbzlQ2U/tr3ZS1RdmFFx9sGoi45IYAM/J2dWR+QLpFDDTGV
+    65OjrOCQyJ0SOZ8m67vhraM9bwapjMgxnlgSjZy4PjCRQ6IsnYM+AsaL2pCsTE6n
+    AXw1aSVYmPabWdCZE9Oe8ortLDObE9piXqMctIjeI+TrQ1DQYgdmibVCw7HDTpw4
+    IWuagjnXMyS6LAqWgJl7zLqVwwIXPPNBQAdkJBQ5VEg4dh1rRwA/6Rq1WoK6XPjh
+    /3t2wOMDJb1FL7liQIK4akjRaiX6DFIcDC6yBCHym6/X3uUD+9lwnkWA6fQYybGX
+    0Qv3NA6FOg+HomuiilPJ9zge+oMsmkwImyTTfc9SJlhklzLJVVPXfyDUoSNh+EjR
+    1OxE0BV7t/PizwU3lWrreI8Eyx406xfPT2jinCbgIlK9jtdSZyUe+vCNjgXD3v+f
+    efVRRB8WrF8aFdgnmXcI+dG4TI9wy8SBOe5lJfrxcyW87D0qIDUwv/fMOJFQwDs6
+    WmOD3By56CbdiBBvEJnxZN6P/HERi50uDSraeYQ0Bxss4vw3C1mGdJ1YdCAS2eWu
+    xYxuf1VRd3DGAiI=
+    -----END CERTIFICATE-----
