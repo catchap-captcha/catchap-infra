@@ -64,3 +64,60 @@ catchap-backend/alembic/실측-표구조-20260812.sql
 ⚠️★**그쪽에 먼저 넣은 것은 판단 착오였습니다.** 서비스 저장소는 main 에 무엇이
 들어가든 이미지를 다시 굽고 배포합니다. 실제로 재배포가 돌았습니다(결과는 정상).
 **복원용 자료는 여기(인프라)가 맞는 자리입니다.**
+
+## ⚠️2026-08-12 추가 — `catchap_captcha-표구조.sql`
+
+★**적대적 점검에서 구멍을 찾았습니다.**
+
+릴리스 `assets-20260812` 의 `catchap_captcha-data.sql.gz` 는 **INSERT 만** 들어 있고
+**CREATE TABLE 이 없습니다.** 그런데 라벨링 표 7개는 **어느 저장소에도 정의가
+없었습니다.**
+
+```
+label_admin_sessions · label_admin_users · label_events · label_legacy_reviews
+label_publish_jobs   · label_revisions   · label_tasks
+```
+
+→ 반납 뒤에 되살리면 **「표가 없다」로 실패**합니다. 데이터가 있어도 못 넣습니다.
+
+| 표 | 정의가 어디 있었나 |
+|---|---|
+| `captcha_*` 14개 | `catchap-captcha/deploy/schema.sql` · `catchap-backend/alembic/` |
+| `behavior_*` 2개 | `catchap-captcha/deploy/schema.sql` |
+| **`label_*` 7개** | ❌**없음** — 그래서 이 파일을 만들었습니다 |
+
+### 이 파일
+
+```
+표 21개 · 22,812바이트 · ★INSERT 0건 (구조만)
+뽑은 법  파드 안에서 SHOW CREATE TABLE
+        → 자격증명이 밖으로 나가지 않습니다 (금고 로더가 프로세스 안에만 넣습니다)
+확인    password 로 걸린 3줄은 전부 ★칼럼 이름 (`password_hash` · `must_change_password`)
+```
+
+### 되살리는 순서
+
+```bash
+CREATE DATABASE catchap_captcha CHARACTER SET utf8mb4;
+mysql ... catchap_captcha < catchap_captcha-표구조.sql     # ① 표 만들기
+gunzip -c catchap_captcha-data.sql.gz | mysql ... catchap_captcha   # ② 데이터
+```
+
+★**①을 건너뛰면 ②가 통째로 실패합니다.**
+
+### ⬜아직 정하지 못한 것 — 행동AI 학습 데이터
+
+백업에 **안 들어간 표 13개(125,604행)** 가 있습니다. 대부분 만료되는 것이지만,
+**`captcha_behavior_batches` 74,670행은 성원님의 행동AI 학습 데이터**입니다.
+
+```
+captcha_behavior_batches        74,670행   ★행동AI 학습 자료
+captcha_behavior_sessions        5,721행
+captcha_behavior_fingerprints    3,031행
+behavior_summaries               3,929행
+behavior_shadow_predictions      3,529행
+captcha_challenges_v2 · captcha_challenge_objects · captcha_attempts · captcha_tokens
+label_admin_users · label_admin_sessions   ← ★비밀번호 해시라 일부러 뺐습니다
+```
+
+⚠️**반납하면 사라집니다.** 성원님께 필요한지 여쭙고 결정해야 합니다.
