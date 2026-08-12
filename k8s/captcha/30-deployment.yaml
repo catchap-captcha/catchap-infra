@@ -136,11 +136,18 @@ spec:
             #   ⚠️다만 파드가 죽으면 사라지고, 파드마다 흩어진다. 아래 README 참고.
             - name: runtime
               mountPath: /app/data/runtime
+            # ★Valkey TLS 검증용 CA (공개 인증서 · 읽기 전용)
+            - name: valkey-ca
+              mountPath: /etc/valkey
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
       volumes:
+        - name: valkey-ca
+          configMap:
+            name: valkey-ca
         - name: runtime
           emptyDir:
             sizeLimit: 512Mi
