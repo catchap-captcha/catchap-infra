@@ -218,6 +218,11 @@ data:
   # ★사용자명이 있습니다 — 콘솔 접근 제어의 「DB 사용자 이름」입니다.
   #   AUTH 를 ★한 인자로 보내면 `default` 사용자로 붙어 -WRONGPASS 가 납니다.
   #   0812 에 실제로 겪었습니다. 반드시 `AUTH <사용자> <비밀번호>` 두 인자로 보냅니다.
+  # ★민서님 요청 (2026-08-12) — 코드는 이 경로만 읽으면 됩니다.
+  #   인증서 자체는 11-valkey-ca-configmap.yaml 로 마운트합니다.
+  VALKEY_TLS_CA_FILE: "/etc/valkey/ca.crt"
+  # ★앱 접두어. 민서님이 cc: 로 정하셨습니다. 예) cc:rl:ip:{해시}:1m
+  VALKEY_KEY_PREFIX: "cc:"
   VALKEY_USERNAME: "catchap"
   VALKEY_HOST: "primary.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
   VALKEY_READ_HOST: "reader.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
