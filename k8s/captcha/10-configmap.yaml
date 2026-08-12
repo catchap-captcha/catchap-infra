@@ -43,7 +43,12 @@ data:
   #     ★마지막 것은 ★백엔드와 ★공유한다 — 백엔드의 MAIN_CAPTCHA_SITE_SECRET 과
   #       캡차의 CAPTCHA_SITE_SECRET 은 ★같은 값이다(sha256 로 확인).
   #       한쪽만 바꾸면 강의 캡차 연동이 조용히 깨지므로 ★한 시크릿에 묶었다.
-  SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-captcha-admin-key,catchap-captcha-asset-s3-keys,catchap-service-bridge-key,catchap-main-captcha-site-secret"
+  #   catchap-valkey-auth               VALKEY_PASSWORD
+  #     ★2026-08-12 추가. 민서님이 임시 상태(정답 좌표·만료·레이트리밋·토큰
+  #       유효성)를 캐시로 옮기는 설계를 하시는 중이라 ★먼저 값만 준비해 둔다.
+  #       아직 코드가 안 쓰므로 SECRETS_REQUIRED_VARS 에는 ★넣지 않는다 —
+  #       넣으면 코드가 쓰기 전부터 기동 조건이 되어 버린다.
+SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-captcha-admin-key,catchap-captcha-asset-s3-keys,catchap-service-bridge-key,catchap-main-captcha-site-secret,catchap-valkey-auth"
   # ★엔드포인트는 코드 기본값과 같지만, 어디에 붙는지 보이는 게 낫다.
   SECRETS_IAM_ENDPOINT: "https://iam.kakaocloud.com/identity/v3"
   SECRETS_ENDPOINT: "https://secrets-manager-service.kr-central-2.kakaocloud.com"
@@ -191,3 +196,24 @@ data:
   #   targetOrigin 을 그 범위로만 좁힙니다(main.py:642~645). 비면 좁힐 대상이 없습니다.
   # ⚠️`*` 는 넣지 않습니다 — 아무 사이트나 우리 캡차를 끼워 넣을 수 있게 됩니다.
   EMBED_ORIGINS: "https://www.catchap5.com,https://catchap5.com"
+
+  # ── 캐시 (MemStore Valkey)  ★2026-08-12 추가
+  #
+  # ★왜 넣나 — 캡차의 임시 상태를 DB 대신 캐시에 두려는 설계 때문입니다.
+  #   지금 만료 챌린지를 지우면 `captcha_challenges_v2` 를 참조하는 표 다섯 개가
+  #   전부 ON DELETE CASCADE 라 ★행동AI 학습 데이터 23,647건이 같이 사라집니다.
+  #   임시 상태를 캐시의 EX(만료)로 옮기면 청소 코드도 CASCADE 위험도 없어집니다.
+  #
+  # ⚠️아직 ★쓰는 코드가 없습니다. 값만 미리 둡니다 — 설계는 민서님이 진행 중.
+  #
+  # ★TLS 로 붙을 때 요령 (0803 실측 · `문서/30-작업이력/45-MemStore-인증켜서-재생성/ca.crt.md`)
+  #   서버 인증서에 subjectAltName 이 없어서, `server_hostname` 에 엔드포인트가 아니라
+  #   ★인증서 CN(`service.kakaoenterprise.com`)을 줘야 통과합니다.
+  #   엔드포인트 이름으로 붙으면 `Hostname mismatch` 로 거부됩니다.
+  #   ⚠️2026-08-12 확인 — 문서에 적어 둔 CA 지문과 지금 서버 인증서 지문이 ★다릅니다.
+  #     붙이기 전에 콘솔에서 CA 파일을 다시 받아 대조해야 합니다.
+  VALKEY_HOST: "primary.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
+  VALKEY_READ_HOST: "reader.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
+  VALKEY_PORT: "6379"
+  VALKEY_TLS: "true"
+  VALKEY_TLS_SERVER_NAME: "service.kakaoenterprise.com"
