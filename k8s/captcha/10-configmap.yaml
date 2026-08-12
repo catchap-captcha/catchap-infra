@@ -210,8 +210,15 @@ SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-ca
   #   서버 인증서에 subjectAltName 이 없어서, `server_hostname` 에 엔드포인트가 아니라
   #   ★인증서 CN(`service.kakaoenterprise.com`)을 줘야 통과합니다.
   #   엔드포인트 이름으로 붙으면 `Hostname mismatch` 로 거부됩니다.
-  #   ⚠️2026-08-12 확인 — 문서에 적어 둔 CA 지문과 지금 서버 인증서 지문이 ★다릅니다.
-  #     붙이기 전에 콘솔에서 CA 파일을 다시 받아 대조해야 합니다.
+  #   ✅2026-08-12 ★끝까지 확인했습니다 — 콘솔에서 CA 를 다시 받아 대조하니
+  #     문서(0803)의 지문과 ★같았습니다. 그 CA 로 검증을 ★켠 채 붙어
+  #     AUTH +OK · PING +PONG · DBSIZE :0 을 받았습니다 (TLSv1.3).
+  #     ⚠️서버가 내미는 잎 인증서는 CA 와 ★지문이 다릅니다(같은 이름으로 발급).
+  #       잎 지문을 CA 지문과 비교하면 안 됩니다 — 제가 한 번 틀렸습니다.
+  # ★사용자명이 있습니다 — 콘솔 접근 제어의 「DB 사용자 이름」입니다.
+  #   AUTH 를 ★한 인자로 보내면 `default` 사용자로 붙어 -WRONGPASS 가 납니다.
+  #   0812 에 실제로 겪었습니다. 반드시 `AUTH <사용자> <비밀번호>` 두 인자로 보냅니다.
+  VALKEY_USERNAME: "catchap"
   VALKEY_HOST: "primary.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
   VALKEY_READ_HOST: "reader.catchap-valkey-prod.5f428f1b341249c983ab19c6f8f3fdb4.valkey.managed-service.kr-central-2.kakaocloud.com"
   VALKEY_PORT: "6379"
