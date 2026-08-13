@@ -83,6 +83,13 @@ spec:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: DoNotSchedule
+          # ★★matchLabelKeys 가 없으면 DoNotSchedule 이 오히려 쏠림을 ★뒤집는다.
+          #   0813 실측: ScheduleAnyway → DoNotSchedule 로 올렸더니
+          #   롤링 중에 옛 파드(2-a 2개)까지 같이 세어서 새 파드 둘이 ★둘 다 2-b 로 갔고,
+          #   옛 파드가 빠지자 0/2 로 ★반대쪽 쏠림이 됐다. 고친 게 아니라 옮긴 것이었다.
+          #   pod-template-hash 를 넣으면 ★같은 판본끼리만 세므로 새 파드 2개가 1/1 로 갈린다.
+          matchLabelKeys:
+            - pod-template-hash
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: frontend
