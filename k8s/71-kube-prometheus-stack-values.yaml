@@ -229,9 +229,13 @@ alertmanager:
   #      ①은 백엔드가 죽으면 같이 죽는다. 그런데 '백엔드가 죽었다'가 제일 알아야 할
   #      경보다. 그래서 급함은 백엔드를 거치지 않는 길도 하나 둔다.
   #
-  # ⚠️②의 받는 주소는 ★한 사람뿐이다(운영 담당). Alertmanager 는 DB 를 못 읽어
-  #   명단을 따라갈 수 없다. 이건 '아무도 못 받는' 상황을 막는 안전망이지
-  #   정식 통보 경로가 아니다 — 정식 경로는 ①이다.
+  # ★2026-08-13 변경 — ②의 받는 주소를 ★팀 6개 주소로 늘렸다.
+  #   그전에는 한 사람뿐이라, 관리형 서비스가 아플 때는 Alert Center 로 5명이 아는데
+  #   ★정작 우리 파드·노드가 죽을 때는 한 명만 알았다.
+  #   Alertmanager 는 DB 를 못 읽으므로 명단은 ★이 파일에 박는다 — 사람이 바뀌면 여기를 고친다.
+  #
+  # ★경고(warning)도 직접 메일을 보낸다(catchap-team). 그전에는 백엔드 웹훅으로만 갔는데,
+  #   백엔드가 죽으면 경고가 통째로 사라졌다. 대신 반복 주기를 12시간으로 길게 둔다.
   # ══════════════════════════════════════════════════════════════════
   config:
     global:
@@ -243,7 +247,7 @@ alertmanager:
       smtp_require_tls: true
 
     route:
-      receiver: catchap-backend
+      receiver: catchap-team
       # 같은 경보를 같은 대상별로 묶는다 — 파드 8개가 동시에 넘쳐도 알림은 묶음 하나다.
       group_by: [alertname, namespace]
       group_wait: 30s         # 첫 경보 뒤 30초 더 기다렸다가 같이 온 것을 묶는다
@@ -283,6 +287,32 @@ alertmanager:
                 type: Bearer
                 credentials_file: /etc/alertmanager/secrets/alertmanager-smtp/WEBHOOK_TOKEN
 
+      - name: catchap-team
+        # ★2026-08-13 신설 — 경고(warning)도 팀 전원이 메일로 받는다.
+        #   그전에는 백엔드 웹훅으로만 가서, ★백엔드가 죽으면 경고가 통째로 사라졌다.
+        webhook_configs:
+          - url: http://backend-api.catchap.svc.cluster.local:8000/api/v1/internal/alerts
+            send_resolved: true
+            max_alerts: 20
+            http_config:
+              authorization:
+                type: Bearer
+                credentials_file: /etc/alertmanager/secrets/alertmanager-smtp/WEBHOOK_TOKEN
+        email_configs:
+          - to: 09.daviya.09@daviya.kr, louis-eric@daum.net, benja1233537@gmail.com, kimminseo8135@gmail.com, leqsss94@gmail.com, wwdhogo@gmail.com
+            send_resolved: true
+            headers:
+              Subject: '[CatChap 경고] {{ .CommonLabels.alertname }} ({{ .Alerts | len }}건)'
+            html: |
+              <p><b>{{ .Status | toUpper }}</b> — 경고입니다. 급하지는 않지만 봐 주십시오.</p>
+              {{ range .Alerts }}
+              <p>· {{ .Annotations.summary }}<br>
+                 <small>{{ .Annotations.description }}</small><br>
+                 <small>대상: {{ range $k, $v := .Labels }}{{ $k }}={{ $v }} {{ end }}</small></p>
+              {{ end }}
+              <p><small>★파드·노드 감시는 클러스터 안 Prometheus 가 봅니다.
+              관리형 서비스(MySQL·Valkey·LB)는 카카오 Alert Center 가 따로 보냅니다.</small></p>
+
       - name: catchap-critical
         webhook_configs:
           - url: http://backend-api.catchap.svc.cluster.local:8000/api/v1/internal/alerts
@@ -293,7 +323,8 @@ alertmanager:
                 type: Bearer
                 credentials_file: /etc/alertmanager/secrets/alertmanager-smtp/WEBHOOK_TOKEN
         email_configs:
-          - to: 09.daviya.09@daviya.kr
+          # ★2026-08-13 — 팀 전원. Alertmanager 는 DB 를 못 읽어 여기에 박는다.
+          - to: 09.daviya.09@daviya.kr, louis-eric@daum.net, benja1233537@gmail.com, kimminseo8135@gmail.com, leqsss94@gmail.com, wwdhogo@gmail.com
             send_resolved: true
             headers:
               Subject: '[CatChap 급함] {{ .CommonLabels.alertname }} ({{ .Alerts | len }}건)'
