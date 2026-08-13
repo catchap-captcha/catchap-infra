@@ -63,12 +63,26 @@ spec:
               labelSelector:
                 matchLabels:
                   app.kubernetes.io/name: frontend
-      # ★영역 균형은 "되도록"(ScheduleAnyway)으로 남긴다.
-      #   나중에 노드가 늘면 같은 영역에 몰리지 않게 유도하되, 못 지킨다고 파드를 막지는 않는다.
+      # ★★영역 균형을 "되도록"에서 ★강제로 올린다 (2026-08-13 실측으로 변경).
+      #
+      #   0804 에 ScheduleAnyway 로 둔 이유는 "못 지킨다고 파드를 막지는 말자" 였다.
+      #   ★그런데 실제로 안 지켜졌다 — 0813 21시에 두 벌이 ★둘 다 kr-central-2-a
+      #   (host-10-0-2-128 · host-10-0-2-210) 에 앉아 있었다.
+      #   테인트도 없고 자원도 남아 있었다(노드 최대 20%). 못 간 게 아니라
+      #   ★soft 제약이 다른 점수에 밀린 것이다.
+      #
+      #   그 상태에서 2-a 가 죽으면 ★백엔드·캡차는 살아 있는데 화면이 통째로 안 뜬다.
+      #   프론트는 사용자가 처음 닿는 곳이라 이 쏠림의 대가가 가장 크다.
+      #
+      #   ⚠️DoNotSchedule 로 올리면 한 영역이 통째로 죽었을 때 두 번째 파드가
+      #     Pending 이 된다. ★바로 위 hostname 제약에서 이미 같은 선택을 했다 —
+      #     "한 노드에 둘을 띄워 봐야 그 노드가 죽으면 같이 죽는다".
+      #   ✅롤링 업데이트는 막히지 않는다: 2벌 + maxSurge 로 잠깐 3벌이 돼도
+      #     2/1 이라 skew 1 이내다. 노드가 4대(영역당 2대)라 hostname 제약도 여유가 있다.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: frontend
