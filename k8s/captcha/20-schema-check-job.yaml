@@ -84,7 +84,7 @@ spec:
         - name: catchap-registry
       containers:
         - name: schema-check
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-captcha-repo/catchap-captcha:f40b15e
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-captcha-repo/catchap-captcha:e7d02cc
           imagePullPolicy: IfNotPresent
           command: ["python", "-c"]
           args:
