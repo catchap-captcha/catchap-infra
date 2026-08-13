@@ -79,7 +79,7 @@ spec:
           # ⚠️태그가 이미지 ID 입니다. GPU 소스가 ★어느 커밋과도 일치하지 않습니다
           #   (origin/sw 의 repositories.py 는 24,216 으로 또 다릅니다).
           #   → 저장소를 정리하고 나면 커밋 해시로 바꿉니다.
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-behavior-ai:b921a45
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-ai-repo/catchap-behavior-ai:074506c
           imagePullPolicy: IfNotPresent
           # ★★배포 중 502 를 없앤다 (2026-08-12 실측으로 넣음).
           #
