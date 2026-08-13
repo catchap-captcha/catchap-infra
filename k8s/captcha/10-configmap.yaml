@@ -44,10 +44,11 @@ data:
   #       캡차의 CAPTCHA_SITE_SECRET 은 ★같은 값이다(sha256 로 확인).
   #       한쪽만 바꾸면 강의 캡차 연동이 조용히 깨지므로 ★한 시크릿에 묶었다.
   #   catchap-valkey-auth               VALKEY_PASSWORD
-  #     ★2026-08-12 추가. 민서님이 임시 상태(정답 좌표·만료·레이트리밋·토큰
-  #       유효성)를 캐시로 옮기는 설계를 하시는 중이라 ★먼저 값만 준비해 둔다.
-  #       아직 코드가 안 쓰므로 SECRETS_REQUIRED_VARS 에는 ★넣지 않는다 —
-  #       넣으면 코드가 쓰기 전부터 기동 조건이 되어 버린다.
+  #     ★2026-08-12 추가. 그때는 코드가 아직 안 써서 SECRETS_REQUIRED_VARS 에
+  #       ★일부러 넣지 않았다 — 쓰기 전부터 기동 조건이 되면 안 되므로.
+  #     ★2026-08-13 이제 코드가 쓴다(app/cache.py · 1단계 비교). 그래서 넣었다.
+  #       실측 — 챌린지 발급마다 카운터를 쓴다. 어제 2,554건 · 오늘 154건.
+  #       넣기 전에 ★값이 실제로 들어오는지 확인했다(없는 걸 필수로 걸면 기동 실패).
   SECRETS_NAMES: "catchap-captcha-app-secret,catchap-captcha-db-account,catchap-captcha-admin-key,catchap-captcha-asset-s3-keys,catchap-service-bridge-key,catchap-main-captcha-site-secret,catchap-valkey-auth"
   # ★엔드포인트는 코드 기본값과 같지만, 어디에 붙는지 보이는 게 낫다.
   SECRETS_IAM_ENDPOINT: "https://iam.kakaocloud.com/identity/v3"
@@ -60,7 +61,7 @@ data:
   #   ★여기 적은 변수가 하나라도 안 오면 로더가 예외를 던져 파드가 안 뜬다.
   #     옛 파드가 계속 받으므로 서비스는 안 끊긴다 — 그게 옳은 실패다.
   #   ⚠️금고에서 키를 뺄 때는 ★여기서도 같이 빼야 한다. 안 그러면 기동이 막힌다.
-  SECRETS_REQUIRED_VARS: "APP_SECRET,DB_USER,DB_PASSWORD,CAPTCHA_ADMIN_KEY,ASSET_S3_ACCESS_KEY,ASSET_S3_SECRET_KEY,BEHAVIOR_AI_BACKEND_KEY,CAPTCHA_SITE_KEY,CAPTCHA_SITE_SECRET"
+  SECRETS_REQUIRED_VARS: "APP_SECRET,DB_USER,DB_PASSWORD,CAPTCHA_ADMIN_KEY,ASSET_S3_ACCESS_KEY,ASSET_S3_SECRET_KEY,BEHAVIOR_AI_BACKEND_KEY,CAPTCHA_SITE_KEY,CAPTCHA_SITE_SECRET,VALKEY_PASSWORD"
 
   # ── 데이터베이스 (관리형 MySQL)
   # ★DB_UNIX_SOCKET 은 넣지 않는다. db.py 는 호스트가 localhost 일 때만 소켓을 쓰므로
