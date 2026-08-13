@@ -1,0 +1,51 @@
+# 개발자가 「배포가 반영됐나 · 파드가 왜 죽었나」를 스스로 보기 위한 ★최소 권한.
+#
+# ★왜 따로 만드나 — 옆의 `25-rbac-읽기.yaml` 은 ★백엔드 파드용이다.
+#   거기에 pods/log 를 더하면 백엔드 앱까지 로그를 읽게 된다. 필요 없는 권한이라
+#   나눈다. 파일이 backend/ 에 있는 것은 ArgoCD 가 이 경로만 보기 때문이고,
+#   Role 자체는 catchap 네임스페이스 것이다.
+#
+# ★읽기만 준다 — get·list. 바꾸는 동사(create·update·patch·delete)는 아예 없다.
+# ★Role 이지 ClusterRole 이 아니다 — catchap 네임스페이스 ★안에서만 통한다.
+#   monitoring·argocd·kube-system 은 못 본다.
+#
+# 🚫★secrets 는 일부러 뺐다. 이 계정은 금고(Secrets Manager)를 따로 읽으라고
+#   만든 것인데, 클러스터 Secret 을 읽게 하면 거기서 ★금고 부트스트랩 키가 그대로
+#   나온다. 그러면 계정을 나눈 의미가 없어진다.
+# 🚫★pods/exec 도 뺐다. 파드 안에 들어가면 읽기 전용이 아니게 된다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: catchap-dev-read
+  namespace: catchap
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list"]
+---
+# ⚠️대상은 ★사람이 아니라 서비스 계정이다. 카카오클라우드 서비스 계정은
+#   클러스터에 `User <계정이메일>` 로 들어온다 — 옆의 `catchap-ci-deployer` 가
+#   같은 모양이다(`90-rbac-catchap-ci.yaml`).
+#
+# ⚠️이 계정에는 ★프로젝트 역할(멤버·리더)을 일부러 안 줬다. 0805 실측 —
+#   프로젝트 멤버는 클러스터 신원에 `member` 로 실려 와서 ★RBAC 을 좁혀도
+#   그 위에서 통과한다. 그래서 서비스 역할(KMS·Secrets)만 준다.
+#
+# 되돌리기: 이 파일을 지우면 ArgoCD 가 걷어 간다. 계정 자체를 막으려면
+#   서비스 계정의 IAM 액세스 키를 삭제하는 편이 확실하다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: catchap-dev-read
+  namespace: catchap
+subjects:
+  - kind: User
+    name: catchap-dev-sw-kc-sfacspace05@kc.serviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: catchap-dev-read
