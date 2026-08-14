@@ -99,7 +99,7 @@ spec:
           #   태그는 이미지 ID (옛 서버 `catchap-frontend:c48cdec` 를 그대로 가져옴).
           #   ★박힌 API 주소가 `https://api.catchap5.com/api/v1` 인 것을 확인했습니다 —
           #     프론트는 빌드 때 주소가 코드에 박히므로 이걸 안 보면 엉뚱한 곳을 부릅니다.
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-front-repo/catchap-frontend:ceb18e6
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-front-repo/catchap-frontend:c00f32c
           imagePullPolicy: IfNotPresent
           # ★★배포 중 502 를 없앤다 (2026-08-12 실측으로 넣음).
           #
