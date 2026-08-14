@@ -75,7 +75,7 @@ spec:
           # ⚠️태그가 이미지 ID 입니다. 앞 태그(e802e05a2ad2)는 커밋 해시였는데,
           #   위젯 빌드 결과물이 git 에 없어서 이번엔 커밋으로 못 가리킵니다.
           #   → 저장소를 정리하면 커밋 해시로 되돌립니다.
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-captcha-repo/catchap-captcha:2a18ce6
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-captcha-repo/catchap-captcha:551f3be
           imagePullPolicy: IfNotPresent
           # ★★배포 중 502 를 없앤다 (2026-08-12 실측으로 넣음).
           #
