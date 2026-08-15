@@ -34,15 +34,6 @@ defaultRules:
 # ─────────────────────────────────────────────────────────────
 prometheus:
   prometheusSpec:
-    # ★★2벌로 띄우고 ★영역마다 하나씩 강제한다 (0815).
-    #   왜 Alertmanager 만으로는 부족한가 — Prometheus 가 죽으면 ★경보를 판단할 주체가
-    #   없어져서 Alertmanager 를 두 벌로 만들어도 보낼 것이 없다. 둘 다 해야 완결된다.
-    #   ⚠️두 벌이 각자 수집하므로 같은 경보가 두 번 만들어지지만
-    #   Alertmanager 가 gossip 으로 ★중복을 지운다(표준 구성).
-    replicas: 2
-    podAntiAffinity: hard
-    podAntiAffinityTopologyKey: topology.kubernetes.io/zone
-
     retention: 15d          # ★보존 기간. 늘리면 디스크도 같이 늘려야 한다
     retentionSize: 18GB     # ★디스크가 꽉 차기 전에 스스로 지우게 (20Gi 중 18GB)
 
@@ -77,17 +68,10 @@ grafana:
     userKey: admin-user
     passwordKey: admin-password
 
-  # ★★디스크를 붙이지 않는다 (0815).
-  #   왜 — 그라파나는 설정을 SQLite 파일 하나에 담고 그 디스크는 ★한 번에 한 파드만
-  #   붙일 수 있어서(RWO) 두 벌로 못 띄운다. 디스크를 붙이면 ★그 영역에 묶여
-  #   영역이 죽을 때 그라파나가 아예 못 뜬다. 떼면 어느 영역에서든 뜬다.
-  #   ★떼어도 되는 이유(지우기 전에 열어서 확인함) —
-  #     대시보드 26개 = 전부 ConfigMap(사이드카) · 계정 = admin 하나(위 existingSecret)
-  #     플러그인 5개 = 이미지에 들어 있는 기본 앱이라 다시 깔린다
-  #   ⚠️맞바꿈 — 파드가 재시작하면 ★화면에서 바꾼 것은 사라진다.
-  #     대시보드를 새로 만들려면 ConfigMap 으로 넣는다(그게 원래 방식이기도 하다).
   persistence:
-    enabled: false
+    enabled: true
+    storageClassName: csi-cinder-sc-wait
+    size: 5Gi
 
   # ★그라파나를 열면 「CatChap 한눈에」가 ★먼저 뜨게 한다 (0806)
   #   기본값은 그라파나 소개 화면인데, 대시보드가 25개나 깔려 있어서
@@ -218,14 +202,6 @@ grafana:
 # ─────────────────────────────────────────────────────────────
 alertmanager:
   alertmanagerSpec:
-    # ★★2벌로 띄우고 ★영역마다 하나씩 강제한다 (0815).
-    #   0815 영역 장애 시험에서 ★디스크가 2-a 에 묶여 있어 2-a 가 죽자 경보가 통째로 멈췄다.
-    #   csi-cinder-sc-wait 가 WaitForFirstConsumer 라 ★파드가 뜬 영역에 디스크가 따라 생긴다
-    #   → 두 벌이 다른 영역에 뜨면 디스크도 영역별로 하나씩 잡힌다.
-    replicas: 2
-    podAntiAffinity: hard
-    podAntiAffinityTopologyKey: topology.kubernetes.io/zone
-
     storage:
       volumeClaimTemplate:
         spec:
