@@ -69,7 +69,7 @@ spec:
       containers:
         - name: migrate
           # ⬜태그는 CI 가 커밋 해시로 고칩니다 — Deployment 와 ★같은 태그여야 합니다
-          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-backend-repo/catchap-backend:c8e05ea
+          image: kc-sfacspace05.kr-central-2.kcr.dev/catchap-backend-repo/catchap-backend:2a55d8f
           imagePullPolicy: IfNotPresent
           # ★먼저 「무엇을 할 것인지」를 찍고 돌립니다. 로그만 보고도 판단할 수 있게.
           command: ["/bin/sh", "-c"]
