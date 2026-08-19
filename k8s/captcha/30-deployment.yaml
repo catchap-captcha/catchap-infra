@@ -6,6 +6,10 @@ metadata:
   labels:
     app.kubernetes.io/name: captcha
 spec:
+  # ⚠️★이 값은 ★HPA 가 없을 때의 초기값입니다. 지금 벌 수를 정하는 것은
+  #   k8s/61-hpa-공통.yaml 의 HPA 입니다(최소 2 · 최대 4).
+  #   ArgoCD 는 이 필드를 ★무시하도록 해 뒀습니다(k8s/argocd/app-captcha.yaml).
+  #   ★여기를 고쳐도 안 바뀝니다 — 바꾸려면 HPA 의 minReplicas 를 고치세요.
   replicas: 2
   revisionHistoryLimit: 5
   selector:

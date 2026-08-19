@@ -27,6 +27,9 @@ spec:
     syncOptions:
       - CreateNamespace=false
       - RespectIgnoreDifferences=true
+  # ✅0819 확인 — 다른 4개 앱은 HPA 가 생겨 `/spec/replicas` 무시를 다시 켰지만
+  #   ★stt-worker 는 HPA 를 ★일부러 안 넣었습니다(GPU 1장뿐이라 늘려도 못 뜹니다).
+  #   그래서 여기 replicas 는 계속 ★git 이 정합니다. 아래 판단 그대로 둡니다.
   # ⚠️★ignoreDifferences 를 ★안 씁니다 (0810 오후 — 실제로 당해서 뺐습니다).
   #
   #   다른 앱을 따라 `/spec/replicas` 를 무시하게 해 뒀더니, git 에서 복제본을
