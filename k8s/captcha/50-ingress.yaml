@@ -11,6 +11,17 @@ metadata:
   namespace: catchap
   labels:
     app.kubernetes.io/name: captcha
+  annotations:
+    # ── ★IP 당 요청 제한 (0819 추가) — 단순 HTTP 폭주를 막는다
+    #
+    # ★캡차는 ★남의 사이트에 심는 위젯이 부른다. 한 회사 회선(NAT) 뒤에서
+    #   여러 사람이 동시에 풀 수 있으므로 www·api 보다 ★두 배로 둔다.
+    #   앱 자체에도 분당 챌린지 30개 제한이 따로 있다 — 이건 그 앞에 치는 그물이다.
+    #
+    # ⚠️진짜 사용자 IP 기준이다 — use-forwarded-headers 와 proxy-real-ip-cidr 가
+    #   켜져 있어야 성립한다(k8s/ingress-nginx/10-controller-configmap.yaml).
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "200"
 spec:
   ingressClassName: nginx
   rules:

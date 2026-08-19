@@ -27,6 +27,20 @@ metadata:
     #   그 방식은 $request_uri 같은 변수를 못 써서 경로가 사라졌다(실측: /courses/3 → /).
     #   ingress-nginx 에 이 목적의 정식 설정이 있어서 그걸로 바꿨다.
     #   configuration-snippet 을 켜지 않아도 된다 — 그건 클러스터 전체에 열려 위험하다.
+    # ── ★IP 당 요청 제한 (0819 추가) — 단순 HTTP 폭주를 막는다
+    #
+    # ★값을 이렇게 잡은 근거 (0819 실측)
+    #   화면 한 장이 부르는 요청 = ★12~15개 (로그인 12·메인 15, 브라우저로 셈)
+    #   ingress-nginx 는 limit-rps 에 ★burst 를 5배로 준다 → 50 이면 순간 250개까지 통과.
+    #   ★같은 회선(NAT) 뒤에 여러 명이 있어도 막히지 않게 넉넉히 둔 값이다.
+    #   사람이 브라우저로 쓰는 한 절대 안 걸리고, 자동화된 폭주만 걸린다.
+    #
+    # ⚠️이 제한은 ★진짜 사용자 IP 기준이다 — use-forwarded-headers 와
+    #   proxy-real-ip-cidr 이 켜져 있어야 성립한다(10-controller-configmap.yaml).
+    #   그것이 없으면 전원이 한 덩어리로 묶여 ★한 사람이 전체를 막는다.
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    # 동시 연결. 브라우저가 도메인당 6개쯤 쓰므로 100 이면 여러 명이 써도 남는다.
+    nginx.ingress.kubernetes.io/limit-connections: "100"
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
     # ★영상 업로드가 있어 본문 크기 제한을 올린다. 기본 1MB 로는 바로 413 이 난다.
     nginx.ingress.kubernetes.io/proxy-body-size: "2048m"
@@ -95,6 +109,20 @@ metadata:
     app.kubernetes.io/name: captcha
   annotations:
     # ★$2 = 아래 정규식의 두 번째 괄호 = 접두사를 뗀 나머지 경로
+    # ── ★IP 당 요청 제한 (0819 추가) — 단순 HTTP 폭주를 막는다
+    #
+    # ★값을 이렇게 잡은 근거 (0819 실측)
+    #   화면 한 장이 부르는 요청 = ★12~15개 (로그인 12·메인 15, 브라우저로 셈)
+    #   ingress-nginx 는 limit-rps 에 ★burst 를 5배로 준다 → 50 이면 순간 250개까지 통과.
+    #   ★같은 회선(NAT) 뒤에 여러 명이 있어도 막히지 않게 넉넉히 둔 값이다.
+    #   사람이 브라우저로 쓰는 한 절대 안 걸리고, 자동화된 폭주만 걸린다.
+    #
+    # ⚠️이 제한은 ★진짜 사용자 IP 기준이다 — use-forwarded-headers 와
+    #   proxy-real-ip-cidr 이 켜져 있어야 성립한다(10-controller-configmap.yaml).
+    #   그것이 없으면 전원이 한 덩어리로 묶여 ★한 사람이 전체를 막는다.
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    # 동시 연결. 브라우저가 도메인당 6개쯤 쓰므로 100 이면 여러 명이 써도 남는다.
+    nginx.ingress.kubernetes.io/limit-connections: "100"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/proxy-body-size: "2048m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
@@ -128,6 +156,20 @@ metadata:
   labels:
     app.kubernetes.io/name: backend
   annotations:
+    # ── ★IP 당 요청 제한 (0819 추가) — 단순 HTTP 폭주를 막는다
+    #
+    # ★값을 이렇게 잡은 근거 (0819 실측)
+    #   화면 한 장이 부르는 요청 = ★12~15개 (로그인 12·메인 15, 브라우저로 셈)
+    #   ingress-nginx 는 limit-rps 에 ★burst 를 5배로 준다 → 50 이면 순간 250개까지 통과.
+    #   ★같은 회선(NAT) 뒤에 여러 명이 있어도 막히지 않게 넉넉히 둔 값이다.
+    #   사람이 브라우저로 쓰는 한 절대 안 걸리고, 자동화된 폭주만 걸린다.
+    #
+    # ⚠️이 제한은 ★진짜 사용자 IP 기준이다 — use-forwarded-headers 와
+    #   proxy-real-ip-cidr 이 켜져 있어야 성립한다(10-controller-configmap.yaml).
+    #   그것이 없으면 전원이 한 덩어리로 묶여 ★한 사람이 전체를 막는다.
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    # 동시 연결. 브라우저가 도메인당 6개쯤 쓰므로 100 이면 여러 명이 써도 남는다.
+    nginx.ingress.kubernetes.io/limit-connections: "100"
     nginx.ingress.kubernetes.io/proxy-body-size: "2048m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
