@@ -10,6 +10,13 @@ spec:
   #   k8s/61-hpa-공통.yaml 의 HPA 입니다(최소 2 · 최대 4).
   #   ArgoCD 는 이 필드를 ★무시하도록 해 뒀습니다(k8s/argocd/app-frontend.yaml).
   #   ★여기를 고쳐도 안 바뀝니다 — 바꾸려면 HPA 의 minReplicas 를 고치세요.
+  #
+  #   ✅0819 확인 — 부하로 4벌을 만든 뒤 ★일부러 sync 를 돌려 봤습니다.
+  #     · syncOptions 없이 부른 sync → ★4벌이 2벌로 떨어졌습니다(HPA 가 도로 올림)
+  #     · RespectIgnoreDifferences 를 물린 sync → ★4벌 그대로였습니다
+  #     ★자동 sync 는 앱의 syncOptions 를 물고 가므로 실제 배포에서는 안 떨어집니다.
+  #     ⚠️손으로 sync 를 부를 때 syncOptions 를 빼면 떨어집니다 — argocd CLI/화면을
+  #       쓰면 자동으로 물고 갑니다.
   replicas: 2
   revisionHistoryLimit: 5
   selector:
