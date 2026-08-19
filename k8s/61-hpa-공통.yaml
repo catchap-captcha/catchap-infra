@@ -1,0 +1,173 @@
+# 자동 확장(HPA) — 사람이 몰리면 벌 수를 늘리고, 한가해지면 줄인다
+#
+# ★손으로 적용한다 (ArgoCD 가 이 폴더를 안 본다)
+#     kubectl apply -f k8s/61-hpa-공통.yaml
+#
+# ─────────────────────────────────────────────────────────────
+# ★왜 넣나
+#   요청 제한(50-ingress-공통.yaml)은 ★한 IP 가 몰아치는 것을 끊는다.
+#   그런데 ★여러 사람이 정상적으로 몰려오는 것(심사 시연·수업 시작 시간)과
+#   ★공격자가 IP 를 여러 개 쓰는 것은 끊을 수 없다. 그때는 ★받아 내야 한다.
+#
+# ★왜 효과가 있나 — 자원이 남기 때문이다 (0819 실측)
+#     노드 4대 CPU 총합    4 + 16 + 16 + 4 = 40개
+#     지금 잡힌 양          3.6개 → ★90% 가 논다
+#
+#   ⚠️그리고 ★파드 하나가 쓸 수 있는 양에 천장이 있다. 프로세스(워커) 수만큼만 쓴다.
+#       backend-api  워커 3 → 파드당 최대 3코어
+#       captcha-api  워커 3 → 3코어
+#       behavior-ai  워커 1 → ★1코어  (그래서 늘리는 값이 가장 크다)
+#       frontend     nginx 5 → 5코어 (정적 파일이라 CPU 를 거의 안 쓴다)
+#   즉 벌을 늘려야 ★놀던 코어를 쓴다. 「자원이 늘어나서」가 아니라
+#   「있는데 안 쓰던 것을 쓰게 되어서」 빨라진다.
+#
+# 🚫★언제 효과가 없나 — 노드가 꽉 찬 뒤다.
+#   그때는 같은 코어를 더 많은 일꾼이 나눠 쓸 뿐이고, 전환 비용으로 조금 느려진다.
+#   ★HPA 는 노드를 안 늘린다. 그래서 최대치를 묶어 둔다(아래 maxReplicas).
+#
+# ⚠️★minReplicas 를 2로 둔다 — 지금과 같다. ★어떤 경우에도 지금보다 줄지 않는다.
+#   1로 내려가면 이중화가 깨진다. 「한가하니 한 벌로」는 우리가 원하는 것이 아니다.
+#
+# ⚠️★stt-worker 는 넣지 않는다 — GPU 가 1장밖에 안 남아 늘려도 Pending 이 된다.
+#   그쪽은 벌 수가 아니라 ★줄 세우기로 푼다(stt-worker PR #13).
+#
+# ⚠️★병목이 DB 로 옮겨 갈 수 있다. 앱을 늘리면 DB 연결도 늘어난다.
+#   그래서 maxReplicas 를 6으로 묶는다 — 무한정 늘리지 않는다.
+#
+# ★안 늘어나는 것이 정상이다 — 지금 CPU 사용률은 요구량의 3% 안팎이다.
+#   평소에는 minReplicas 그대로 있다가, 진짜로 몰릴 때만 움직인다.
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-api
+  namespace: catchap
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # ★요구량(200m) 대비 비율이다. 70% = 140m 을 넘으면 늘린다.
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      # 몰릴 때는 빨리 — 15초 보고 판단, 한 번에 최대 2벌씩
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      # ★줄일 때는 천천히 — 잠깐 한가하다고 줄였다가 다시 몰리면 손해다
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: captcha-api
+  namespace: catchap
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: captcha-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: behavior-ai
+  namespace: catchap
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: behavior-ai
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend
+  namespace: catchap
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
