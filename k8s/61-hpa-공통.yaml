@@ -31,8 +31,21 @@
 # ⚠️★stt-worker 는 넣지 않는다 — GPU 가 1장밖에 안 남아 늘려도 Pending 이 된다.
 #   그쪽은 벌 수가 아니라 ★줄 세우기로 푼다(stt-worker PR #13).
 #
-# ⚠️★병목이 DB 로 옮겨 갈 수 있다. 앱을 늘리면 DB 연결도 늘어난다.
-#   그래서 maxReplicas 를 6으로 묶는다 — 무한정 늘리지 않는다.
+# ⚠️★★maxReplicas 는 ★4다 — 노드 수와 같다. 6이 아니다.
+#
+#   ★0819 에 실제로 부하를 줘서 배웠다. 6으로 뒀더니 4벌만 뜨고 ★2벌이 영원히 Pending 이었다.
+#       0/4 nodes are available: 4 node(s) didn't match pod anti-affinity rules
+#
+#   네 앱 모두 podAntiAffinity 가 ★required · topologyKey=hostname 이다.
+#   = 한 노드에 같은 앱 파드는 ★딱 하나. 노드가 4대이므로 ★4벌이 천장이다.
+#   그 위로 올려 봐야 뜨지 않고 Pending 만 쌓여, 화면에 「6벌 원함」이라 적혀
+#   ★실제보다 크게 보이는 착시만 생긴다.
+#
+#   ⚠️늘리려면 노드를 늘리거나 안티어피니티를 preferred 로 낮춰야 한다.
+#     낮추면 한 노드에 여러 벌이 몰릴 수 있어 ★그 노드가 죽을 때 한꺼번에 잃는다.
+#     지금은 그대로 두고 상한만 사실에 맞춘다.
+#
+# ⚠️병목이 DB 로 옮겨 갈 수도 있다 — 앱을 늘리면 DB 연결도 는다. 4벌은 그 면에서도 안전하다.
 #
 # ★안 늘어나는 것이 정상이다 — 지금 CPU 사용률은 요구량의 3% 안팎이다.
 #   평소에는 minReplicas 그대로 있다가, 진짜로 몰릴 때만 움직인다.
@@ -48,7 +61,7 @@ spec:
     kind: Deployment
     name: backend-api
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
@@ -84,7 +97,7 @@ spec:
     kind: Deployment
     name: captcha-api
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
@@ -117,7 +130,7 @@ spec:
     kind: Deployment
     name: behavior-ai
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
@@ -150,7 +163,7 @@ spec:
     kind: Deployment
     name: frontend
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
