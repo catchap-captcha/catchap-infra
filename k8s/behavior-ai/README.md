@@ -115,7 +115,7 @@ $ curl http://127.0.0.1:8010/health
 
 ```
 10-configmap.yaml     비밀 아닌 설정 (DB 주소 · 모델 경로 · 정책)
-20-secret.예시.yaml   ★예시. 실제 값은 kubectl 명령으로 만든다
+(시크릿 예시는 ../예시-시크릿/behavior-ai.yaml.예시)   ★실제 값은 kubectl 명령으로 만든다
 30-deployment.yaml    2벌 · 노드 분리 · 읽기 전용 루트
 40-service.yaml       ClusterIP behavior-ai:8010
 ```

@@ -41,8 +41,8 @@ docker run --rm --entrypoint grep <이미지> -oE '^    [A-Z][A-Z0-9_]*:' /app/a
 ```
 ✅1 kubectl apply -f captcha/00-namespace.yaml        namespace catchap
  2  시크릿을 명령으로 생성                             ★파일에 값을 안 남긴다
-      backend-secret · captcha-secret · behavior-ai-secret
-      (각 폴더의 20-secret.예시.yaml 주석에 명령이 그대로 있음)
+      backend-secret · captcha-secret · behavior-ai-secret · stt-worker-secret (+ catchap-registry)
+      (k8s/예시-시크릿/*.yaml.예시 주석에 명령이 그대로 있음)
  3  kubectl apply -f */10-configmap.yaml
 ✅   frontend 는 완료
  4  ★behavior-ai 를 먼저 올린다 — 캡차가 이 서비스를 부른다
@@ -79,10 +79,13 @@ docker run --rm --entrypoint grep <이미지> -oE '^    [A-Z][A-Z0-9_]*:' /app/a
 backend-secret      2개   SECRETS_ACCESS_KEY · SECRETS_SECRET_KEY   (0807)
 captcha-secret      2개   같음                                       (0810)
 behavior-ai-secret  2개   같음                                       (0810)
+stt-worker-secret   2개   같음                                       (0810 · STT 워커를 클러스터로 들이면서)
 catchap-registry    1개   .dockerconfigjson  ★이것만 못 옮깁니다 —
                           쿠버네티스가 파드를 띄우기 ★전에 필요한 값이라
                           앱이 읽어 올 수 없습니다
-── 클러스터 비밀값 총 ★7개 (전에는 15개)
+── 네임스페이스 catchap 의 비밀값 총 ★9개 (전에는 15개)
+   (monitoring · argocd 네임스페이스에는 따로 있음 — grafana-admin · alertmanager-smtp · kakaocloud-metric-export · infra-repo.
+    전체 목록 = catchap-archive 의 02-Secrets-KMS/02-비밀값-전체목록-다시-만들-때.md)
 ```
 
 ★**값을 바꿀 때는 금고에서 새 버전을 만들고 `kubectl rollout restart` 만 하면 됩니다.**
@@ -111,7 +114,7 @@ YAML 문법        전부 통과
 
 ★**⚠️kubectl 이 간헐적으로 인증서 검증에 실패하면** `~/.catchap/ca.crt` 를 의심하십시오.
 0805 에 **서버 인증서가 CA 자리에 들어가 있는 것**을 찾아 진짜 CA 로 바꿨습니다
-(자세한 것은 `인프라-캡처/00-작업기록.md` 37-6).
+(자세한 것은 `catchap-archive` 의 `01-인프라-기록/30-작업이력/00-작업기록-0728~0804.md` 37-6).
 
 ---
 
