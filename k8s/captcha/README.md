@@ -5,7 +5,7 @@
 ```
 00-namespace.yaml      catchap 네임스페이스
 10-configmap.yaml      비밀이 아닌 설정
-20-secret.예시.yaml     ★예시일 뿐. 실제 값은 명령으로 만든다
+(시크릿 예시는 ../예시-시크릿/captcha.yaml.예시)   ★실제 값은 명령으로 만든다
 30-deployment.yaml     파드 2벌
 40-service.yaml        클러스터 안 주소
 50-ingress.yaml        captcha.catchap5.com → 서비스
@@ -97,7 +97,7 @@
 
 ## 시크릿 만드는 법
 
-값을 파일에 남기지 않는 방법으로 만든다. `20-secret.예시.yaml` 의 주석 참고.
+값을 파일에 남기지 않는 방법으로 만든다. `../예시-시크릿/captcha.yaml.예시` 의 주석 참고.
 
 ★**컷오버 때 회전을 권한다** — `APP_SECRET`·`CAPTCHA_SITE_SECRET` 등이 옛 GPU 서버의
 프로세스 환경에 평문으로 남아 있고, 그 서버는 인터넷에 열려 있다.
